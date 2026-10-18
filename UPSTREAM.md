@@ -51,6 +51,7 @@ section it adds, and the table says why.
 | `.githooks/` | Commit hooks that keep the history publishable |
 | `scripts/preflight_publish.py`, `tests/test_preflight_publish.py` | The publish pre-flight over the whole history (secrets, private names, trailers, Hermes home files, attribution, em dashes), and tests that plant each problem |
 | `scripts/validation_table.py` | Summarises judged localbench sweeps per seed: base against adopted, ledger identity, fallbacks, library entries, models and cost |
+| `VALIDATION.md` | The phase-4 gate for both new executors, with each command and its output |
 | `harness2/substrate/hermes.py` | `HermesSubstrate`: surface, throwaway-home install, launcher (secrets on stdin), harvest, `state.db` read-back, stream-json renderer, preflight |
 | `harness2/conformance_hermes.py` | The live component and floor probe behind `harness2-check --substrate hm --conformance` |
 | `tests/test_hermes_substrate.py`, `tests/scripted_model.py` | Unit tests, and a scripted OpenAI-compatible endpoint for running Hermes with no model; `tests/fixtures/hermes/` holds one recorded conformance rollout |
