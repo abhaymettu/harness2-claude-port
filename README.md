@@ -34,9 +34,8 @@ recursion while keeping model weights fixed:
 This repository is an **independent port** that lets Harness² improve
 [Claude Code](https://github.com/anthropics/claude-code) agents, alongside
 upstream's OpenCode and Codex executors. It is not a Google project and is not
-endorsed by the Harness² authors. A sibling port does the same for Hermes Agent
-at the **harness2-hermes-port** repository, published under the same GitHub
-account.
+endorsed by the Harness² authors. A sibling port does the same for
+Hermes Agent at [harness2-hermes-port](https://github.com/abhaymettu/harness2-hermes-port).
 
 ## Contents
 
