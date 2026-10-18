@@ -8,14 +8,13 @@ Upstream history is not carried. `LICENSE` is the upstream text, unchanged.
 
 `assets/` (the Harness² logo, wordmark, figures and video) is left out. Apache-2.0 section 6
 grants no right to use the licensor's trademarks, and the logo and wordmark are marks. The
-upstream `README.md` and `MANIFEST.in` still name those files; the images are at the upstream
-repository.
+upstream `MANIFEST.in` still names those files; the images are at the upstream repository.
 
 ## Modified upstream files
 
 Apache-2.0 section 4(b) asks that changed files say so. Each Python file below carries the line
-`Modified by The harness2-ports Authors` under its license header, `README.md` says so in the
-section it adds, and the table says why.
+`Modified by The harness2-ports Authors` under its license header, `README.md` and `CONTRIBUTING.md` are
+replaced, and the table says why.
 
 | File | Change | Why |
 |---|---|---|
@@ -35,11 +34,12 @@ section it adds, and the table says why.
 | `harness2/core/tree.py` | `SurfaceSpec.hook_entry_shape`: `nested` (default, unchanged) or `flat`, which checks Hermes hook entries (`matcher`, `command`, `timeout`, `fail_closed`, each typed) | Hermes hook entries are flat; the nested check would refuse every valid one |
 | `harness2/core/spec.py` | `INSTALL_MODES` gains `hermes_home` | The Hermes substrate's install mode |
 | `harness2/cli/_common.py`, `harness2/cli/run_sweep.py`, `harness2/cli/check.py` | `--substrate hm`; the run identity records the `hm` executor model; `--conformance` runs the Hermes probe, with `--provider` | Select and check the Hermes substrate |
-| `README.md` | "Claude Code executor", "localbench", "Hermes executor" and "Validation" sections, and their entries in Contents | Quickstarts, the component mappings and gaps, the grader boundary, and the measured results |
+| `README.md` | Replaced with a README for this port | It describes the port, its two executors, localbench and the measured results, and carries no upstream images |
+| `CONTRIBUTING.md` | Replaced | Upstream's asks for Google's CLA, which does not apply to this repository |
 | `harness2/core/proposer.py`, `harness2/cli/run_sweep.py` | `Proposer.floor_runner`: a callable giving the command prefix for a `claude_cli` session in its working directory, taken from the adapter's `runner_for` | Improver sessions run under the benchmark's read boundary, as rollouts do |
 | `harness2/config.py` | `GRADER_BOUNDARY` from `HARNESS2_GRADER_BOUNDARY` (`seatbelt` default, `off`) | localbench's checker seal needs macOS `sandbox-exec`; `off` is for a container that never mounts the tasks |
 
-## New files
+## Files not in upstream
 
 | File | What it is |
 |---|---|
@@ -51,7 +51,7 @@ section it adds, and the table says why.
 | `.githooks/` | Commit hooks that keep the history publishable |
 | `scripts/preflight_publish.py`, `tests/test_preflight_publish.py` | The publish pre-flight over the whole history (secrets, private names, trailers, Hermes home files, attribution, em dashes), and tests that plant each problem |
 | `scripts/validation_table.py` | Summarises judged localbench sweeps per seed: base against adopted, ledger identity, fallbacks, library entries, models and cost |
-| `VALIDATION.md` | The phase-4 gate for both new executors, with each command and its output |
+| `VALIDATION.md` | The validation record for both executors, with each command and its output |
 | `harness2/substrate/hermes.py` | `HermesSubstrate`: surface, throwaway-home install, launcher (secrets on stdin), harvest, `state.db` read-back, stream-json renderer, preflight |
 | `harness2/conformance_hermes.py` | The live component and floor probe behind `harness2-check --substrate hm --conformance` |
 | `tests/test_hermes_substrate.py`, `tests/scripted_model.py` | Unit tests, and a scripted OpenAI-compatible endpoint for running Hermes with no model; `tests/fixtures/hermes/` holds one recorded conformance rollout |

@@ -1,33 +1,17 @@
-# How to contribute
+# Contributing
 
-We'd love to accept your patches and contributions to this project.
+Issues and pull requests are welcome. Contributions are accepted under the Apache 2.0 license
+that covers this repository.
 
-## Before you begin
+Changes to the Harness² method itself, or to the OpenCode and Codex executors, belong upstream at
+[google-research/harness2](https://github.com/google-research/harness2), which has its own
+contribution terms.
 
-### Sign our Contributor License Agreement
+Before opening a pull request, run the tests:
 
-Contributions to this project must be accompanied by a
-[Contributor License Agreement](https://cla.developers.google.com/about) (CLA).
-You (or your employer) retain the copyright to your contribution; this simply
-gives us permission to use and redistribute your contributions as part of the
-project.
+```bash
+python -m pytest -q tests
+```
 
-If you or your current employer have already signed the Google CLA (even if it
-was for a different project), you probably don't need to do it again.
-
-Visit <https://cla.developers.google.com/> to see your current agreements or to
-sign a new one.
-
-### Review our community guidelines
-
-This project follows
-[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
-
-## Contribution process
-
-### Code reviews
-
-All submissions, including submissions by project members, require review. We
-use GitHub pull requests for this purpose. Consult
-[GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
-information on using pull requests.
+The repository's commit hooks refuse home-directory paths, secrets and attribution trailers. Turn
+them on with `git config core.hooksPath .githooks`.

@@ -1,6 +1,6 @@
 # Validation
 
-This file is added by The harness2-ports Authors. It records the phase-4 gate for the two new
+This file is added by The harness2-ports Authors. It records the validation of the two
 executors, Claude Code (`--substrate cc`) and Hermes (`--substrate hm`): five checks, each with
 the command that ran and what it printed. Paths under `runs/` are the local receipts the
 commands wrote; `runs/` is not part of the repository.
