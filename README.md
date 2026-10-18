@@ -57,6 +57,10 @@ https://github.com/user-attachments/assets/76b10548-b14b-4c8f-9aa5-a93662df4d56
 - [Harness components](#harness-components)
 - [Install](#install)
 - [Run a benchmark](#run-a-benchmark)
+- [Claude Code executor](#claude-code-executor)
+- [localbench](#localbench)
+- [Hermes executor](#hermes-executor)
+- [Validation](#validation)
 - [Experiments](#experiments)
 - [Web access](#web-access)
 - [Results and resume](#results-and-resume)
@@ -137,6 +141,63 @@ Choose one benchmark per command. WorkBuddy also takes `--subset office`,
 [benchmark guides](docs/BENCHMARKS.md) cover each one's data, domains, and
 grading.
 
+## Claude Code executor
+
+This section is added by The harness2-ports Authors. `--substrate cc` runs each rollout as a
+headless Claude Code session (`claude -p`, tested on Claude Code 2.1.301 on macOS) in a fresh
+workspace built from the harness. The improver sessions (editor, composer, reflector) use the
+`claude_cli` channel, so a Claude Code login, subscription or API key, is all either needs.
+Google Cloud is optional (`HARNESS2_CLAUDE_VIA_VERTEX=1`).
+
+| Variable | Meaning |
+|---|---|
+| `HARNESS2_CLAUDE_MODEL` | Executor model, for example `claude-haiku-5-5` |
+| `HARNESS2_IMPROVER_MODEL` | Improver model on the `claude_cli` channel; localbench defaults to `claude-opus-5-5` |
+
+Check that every component reaches a rollout and that the floor holds, then run and judge two
+localbench tasks:
+
+```bash
+export HARNESS2_CLAUDE_MODEL=claude-haiku-5-5
+harness2-check --substrate cc --conformance
+harness2 --bench local --substrate cc --k 1 --only-domains data-cleaning --max-tasks 2
+harness2-judge --bench local --substrate cc --k 1
+```
+
+Where each component goes:
+
+| Component | In the rollout |
+|---|---|
+| System prompt | `.claude/systemprompt.md`, passed with `--append-system-prompt-file` |
+| Guardrails, memory, tool guidance | The workspace `CLAUDE.md` |
+| Skills | `.claude/skills/<name>/SKILL.md` |
+| Scripts | `scripts/` |
+| Subagents | `.claude/agents/<name>.md`, run on the executor model |
+| Plugins | Hooks in `.claude/settings.json`; no other settings key is accepted |
+
+Every session, rollouts and improvers alike, also gets a floor through `--settings` that no
+harness edit reaches. It excludes your user-level `CLAUDE.md` and every `CLAUDE.md` in a parent
+directory, turns auto-memory off, keeps hooks on, denies tools whose effects outlive the session
+(schedules, remote triggers, notifications), and adds the operator's hooks. Sessions run with
+`--setting-sources project --strict-mcp-config --no-session-persistence`, and with permissions
+bypassed inside the workspace. A session runs as you and can read what you can, so run
+untrusted tasks in a container or as a separate user.
+
+## localbench
+
+This section is added by The harness2-ports Authors. `--bench local` is a small suite for
+checking a substrate end to end: 12 tasks in 3 domains (data cleaning, document-to-table
+extraction, a small repository bugfix), each with a deterministic checker, so it needs no judge
+model, Docker or cloud project. The checkers live in `localbench/tasks/<task>/grader/`, outside
+every workspace and model context.
+
+On macOS every localbench session, rollouts and improvers alike, runs under `sandbox-exec`,
+which denies reads under `localbench/tasks/` and under the checkout's `.git` (which holds every
+checker as a blob) for the whole process tree, by whatever route a call takes. Elsewhere set
+`HARNESS2_GRADER_BOUNDARY=off` and run where `localbench/tasks/` is not mounted. Without that
+boundary the only guard is a floor hook that refuses tool calls naming the tasks, and it matches
+strings.
+
 ## Hermes executor
 
 This section is added by The harness2-ports Authors. `--substrate hm` runs rollouts on
@@ -200,6 +261,25 @@ and `cost_source: unknown` with token counts. Hermes passes some credential vari
 the agent's terminal and every passed variable on to hook commands; it redacts token-shaped
 tool output. Use a key you can revoke, and a separate OS user (`HARNESS2_HERMES_RUNNER`) if
 rollouts must not read your files.
+
+## Validation
+
+This section is added by The harness2-ports Authors. Both new executors were run on all 12
+localbench tasks at `--k 1` over two stream-order seeds, then scored by the deterministic
+checkers on the selected output and on the base output. Executor `claude-haiku-5-5`, improver
+`claude-opus-5-5`; cost is at list price as Claude Code reports it.
+
+| Executor | Seed | Tasks ok | Base mean (SD) | Adopted mean (SD) | Fallbacks | Library entries | Rollout cost | Improver cost |
+|---|---|---|---|---|---|---|---|---|
+| Claude Code | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 6 | $0.16 | $8.84 |
+| Claude Code | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 9 | $0.18 | $12.36 |
+| Hermes | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 9 | unknown | $9.57 |
+| Hermes | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 10 | unknown | $11.39 |
+
+The executor already passes every check at base, so this run shows the whole pipeline working
+on both executors and measures no gain from adaptation. Hermes reports no price on a
+subscription login. [VALIDATION.md](VALIDATION.md) has the commands, the conformance probes,
+the isolation tests and the publish pre-flight.
 
 ## Experiments
 
