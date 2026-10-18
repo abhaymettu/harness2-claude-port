@@ -81,6 +81,34 @@ class PreCommitTests(unittest.TestCase):
         self.assertIn("H2_DENY_FILE names a missing file", err)
         self.assertIn("commit refused", err)
 
+    def commit_msg(self, text: str) -> int:
+        msg = self.root / "MSG"
+        msg.write_text(text, encoding="utf-8")
+        p = subprocess.run(
+            [sys.executable, str(HOOK), "commit-msg", str(msg)],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        return p.returncode
+
+    def test_attribution_footers_refuse_the_message(self):
+        footers = [
+            "Co-Authored-By: someone <x@example.org>",
+            "Claude-Session: https://example.org/s",
+            "Signed-off-by: Claude <x@example.org>",
+            "Generated with Claude Code",
+            "\U0001f916 Generated with [Claude Code](https://claude.com/claude-code)",
+            "See https://claude.ai/code/session_0123abcd for the run",
+        ]
+        for footer in footers:
+            with self.subTest(footer=footer):
+                self.assertEqual(self.commit_msg(f"Add a\n\n{footer}\n"), 1)
+
+    def test_a_plain_message_passes(self):
+        self.assertEqual(self.commit_msg("Add a\n\nCode generated with protoc.\n"), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

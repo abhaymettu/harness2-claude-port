@@ -37,7 +37,7 @@ class PreflightTests(unittest.TestCase):
         self.deny = tmp / "deny.txt"
         self.deny.write_text(f"{PRIVATE}\n")
 
-    def git(self, *args: str, msg: str | None = None) -> None:
+    def git(self, *args: str, msg: str | None = None) -> str:
         ident = [
             "-c",
             "user.name=t",
@@ -47,7 +47,10 @@ class PreflightTests(unittest.TestCase):
             "core.hooksPath=/dev/null",
         ]
         cmd = ["git", "-C", str(self.clone), *ident, *args]
-        subprocess.run(cmd + (["-m", msg] if msg else []), check=True, capture_output=True)
+        p = subprocess.run(
+            cmd + (["-m", msg] if msg else []), check=True, capture_output=True, text=True
+        )
+        return p.stdout
 
     def commit(self, files: dict[str, bytes | None], msg: str = "Change a file") -> None:
         for rel, body in files.items():
@@ -110,6 +113,75 @@ class PreflightTests(unittest.TestCase):
                 self.commit(files, msg=msg)
                 rc, status = self.preflight()
                 self.assertEqual(status[check], "FAIL")
+                self.assertEqual([k for k, v in status.items() if v == "FAIL"], [check])
+                self.assertEqual(rc, 1)
+
+    def test_gaps_the_first_review_found_fail(self):
+        dash = "A note \u2014 with a dash.\n"
+        proposer = "harness2/core/proposer.py"
+
+        def relicense():
+            text = (self.clone / proposer).read_text()
+            self.assertIn("Copyright 2026 Google LLC", text)
+            new = text.replace(
+                "Copyright 2026 Google LLC", "Copyright 2026 The harness2-ports Authors"
+            )
+            self.commit({proposer: new.encode()}, msg="Relicense")
+
+        def tag(msg: str, *ident: str):
+            self.commit({"a.txt": b"a\n"}, msg="Add a")
+            self.git(*ident, "tag", "-a", "v0", msg=msg)
+
+        def pathless_blob():
+            blob = self.deny.parent / "blob.txt"
+            blob.write_text(f"owner {PRIVATE}\n")
+            sha = self.git("hash-object", "-w", str(blob)).strip()
+            self.git("tag", "loose", sha)
+
+        def hook_self():
+            text = (self.clone / ".githooks/deny_check.py").read_text()
+            self.commit({".githooks/deny_check.py": f"{text}# owner {PRIVATE}\n".encode()})
+
+        cases = [
+            ("attribution", "Google LLC copyright replaced", relicense),
+            (
+                "em-dashes",
+                "after an added line that reads like a header",
+                lambda: self.commit({"docs/NEW.md": f"first\n++ not a header\n{dash}".encode()}),
+            ),
+            ("em-dashes", "upper-case suffix", lambda: self.commit({"docs/N.MD": dash.encode()})),
+            ("em-dashes", "mdx suffix", lambda: self.commit({"docs/n.mdx": dash.encode()})),
+            ("em-dashes", "annotated tag message", lambda: tag(f"Release\n\n{dash}")),
+            (
+                "footers",
+                "emoji Generated-with footer",
+                lambda: self.commit(
+                    {"a.txt": b"a\n"},
+                    msg="Add a\n\n\U0001f916 Generated with [Claude Code](https://claude.com/x)",
+                ),
+            ),
+            (
+                "footers",
+                "bare session URL",
+                lambda: self.commit(
+                    {"a.txt": b"a\n"}, msg="Add a\n\nhttps://claude.ai/code/session_0123abcd"
+                ),
+            ),
+            (
+                "footers",
+                "annotated tag message",
+                lambda: tag("Release\n\nCo-Authored-By: someone <x@example.org>"),
+            ),
+            ("private", "annotated tag message", lambda: tag(f"Release for {PRIVATE}")),
+            ("private", "tagger identity", lambda: tag("Release", "-c", f"user.name={PRIVATE}")),
+            ("private", "blob with no path", pathless_blob),
+            ("private", "the hook's own blob", hook_self),
+        ]
+        for check, what, plant in cases:
+            with self.subTest(check=check, what=what):
+                self.setUp()
+                plant()
+                rc, status = self.preflight()
                 self.assertEqual([k for k, v in status.items() if v == "FAIL"], [check])
                 self.assertEqual(rc, 1)
 

@@ -52,7 +52,11 @@ FILENAMES = {
     "key file": r"(?:^|/)(?:id_rsa|id_ed25519|id_ecdsa)(?:\.pub)?$|\.pem$|\.p12$",
 }
 
-TRAILERS = r"(?im)^\s*(?:Claude-Session|Co-Authored-By|Generated with|Signed-off-by: Claude)\b"
+TRAILERS = (
+    r"(?im)^\s*(?:Claude-Session|Co-Authored-By|Signed-off-by: Claude)\b"
+    r"|^[^\w\n]*Generated with\b"
+    r"|claude\.ai/code/session"
+)
 
 
 def _git(*args: str) -> str:
