@@ -101,7 +101,40 @@ def _say_codes(seen: str) -> dict:
     return _say(f"Configuration check complete.\nCODES: {codes}\nFILES: (scripted)")
 
 
-POLICIES = {"echo": policy_echo, "conformance": policy_conformance}
+ENV_PROBE = (
+    "pwd; echo HOME=$HOME; "
+    "echo CREDENTIAL_VARS=$(env | grep -E '^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_[A-Z_]*)=' | cut -d= -f1 | tr '\\n' ,)"
+)
+
+
+def policy_env_probe(req: dict) -> dict:
+    """One terminal call reporting the working directory, HOME and how many credential
+    variables the agent's shell can see (a count, never a value), then the output verbatim."""
+    msgs = req.get("messages") or []
+    results = [_text(m.get("content")) for m in msgs if m.get("role") == "tool"]
+    if not results:
+        return _call("terminal", {"command": ENV_PROBE})
+    return _say(results[-1])
+
+
+def policy_command(req: dict) -> dict:
+    """Run $H2_PROBE_COMMAND once with the terminal tool, then repeat its output verbatim."""
+    import os
+
+    results = [
+        _text(m.get("content")) for m in req.get("messages") or [] if m.get("role") == "tool"
+    ]
+    if not results:
+        return _call("terminal", {"command": os.environ["H2_PROBE_COMMAND"]})
+    return _say(results[-1])
+
+
+POLICIES = {
+    "echo": policy_echo,
+    "conformance": policy_conformance,
+    "env-probe": policy_env_probe,
+    "command": policy_command,
+}
 
 
 def _completion(model: str, reply: dict) -> dict:

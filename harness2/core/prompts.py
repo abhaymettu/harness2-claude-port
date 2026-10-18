@@ -622,6 +622,117 @@ _SURFACE_CLAUDE = "\n\n".join(
     [_SURFACE_CLAUDE_HEAD, _surface_part(_SURFACE_OPENCODE, "THE DELIVERABLE'S SHAPE")]
 )
 
+
+_SURFACE_HERMES_HEAD = """\
+# WHAT YOU CAN CHANGE
+
+The harness is a tree of components. Each has a different runtime cost and a different reach:
+
+| path | what it is | when it is in context |
+|---|---|---|
+| `systemprompt.md` | role and procedure | ALWAYS ON -- the start of SOUL.md, Hermes's identity slot; every token competes with the agent's own output budget |
+| `guardrails.md` | standing rules | ALWAYS ON -- a SOUL.md section, same cost |
+| `LongTermMEMORY.md` | durable domain facts | ALWAYS ON -- the memory snapshot, one entry per paragraph, same cost |
+| `tool_descriptions/tool_guidance.md` | how to use the tools | ALWAYS ON -- a SOUL.md section, same cost |
+| `skills/<name>/SKILL.md` | a reusable workflow | name+description advertised; the BODY loads ON DEMAND via `skill_view` |
+| `skills/<name>/scripts/*` | a helper carried with its skill | run with the terminal tool |
+| `sub_agents/<name>/AGENT.md` | a delegated subagent's brief | the agent loads it as skill `agent-<name>` and passes it to `delegate_task`; the child runs in its OWN context |
+| `scripts/<name>.py` | a deterministic helper | run on demand with the terminal tool |
+| `hooks.json` | shell hooks | fire INSIDE the tool loop, on every matching event |
+
+The three that are easy to get wrong:
+
+`skills/` -- YAML frontmatter with `name: <name>` matching the directory and a `description:` is
+REQUIRED. Only name and description are shown up front. A skill never NAMED in the always-on text
+is rarely opened, so it must be named there. If a skill calls a helper, that helper must travel
+with it, run from the workspace root as `python3 skills/<name>/scripts/<file>.py`.
+
+`sub_agents/` -- Hermes has no file-defined subagents. Each AGENT.md (frontmatter `description:`)
+becomes a skill `agent-<name>` holding its body as a brief; the agent passes that brief to
+`delegate_task` as context. The child sees only the brief and the goal: no SOUL, no memory, never
+the main conversation. Worth it for exactly one shape of problem: a bounded sub-task whose INPUT is
+large and whose ANSWER is small. Do not name a skill `agent-<anything>`: that prefix is reserved.
+
+`hooks.json` -- ONE JSON file holding ONLY a top-level "hooks" object (any other setting is
+rejected). It maps an event -- `pre_tool_call`, `post_tool_call`, `pre_llm_call`, `pre_verify`,
+`on_session_start` -- to a list of entries, each `{"matcher": "<tool regex>", "command": "...",
+"timeout": <seconds>}`. Each command receives the event as JSON on stdin (`tool_name`,
+`tool_input`, `extra`). For `pre_tool_call`, printing `{"decision": "block", "reason": "..."}`
+sends that reason back to the model; for `pre_llm_call`, printing `{"context": "..."}` adds text to
+the turn; for `pre_verify`, `{"decision": "block", "reason": "..."}` keeps the agent working before
+it finishes. Commands are split like a shell line but not run by a shell: wrap pipes in
+`sh -c '...'`, or better, put the logic in a `scripts/` helper the hook calls. The only component
+that acts in the tool loop rather than in the prompt -- the only way to enforce something the model
+cannot skip.
+
+Change only what a trajectory shows needs changing -- but WHERE you change something, the FORM
+matters as much as the content, and the cheap form is not the obvious one.
+
+ALWAYS-ON PROSE IS THE EXPENSIVE OPTION. Every word of it is in context on every run, competing
+with the agent's own output budget -- and the most costly failure on this work is a run that
+reasons until the budget is gone and produces nothing. Adding prose makes that MORE likely, not
+less. An on-demand component costs nothing until the moment it is invoked.
+
+So prefer, in this order:
+  - a SKILL for anything with a recognisable trigger -- a procedure for a document type, a
+    format, a recurring situation. This is the default form for new instruction.
+  - a SCRIPT for a deterministic operation the runs hand-rolled and got wrong, or did slowly.
+  - a SUBAGENT for a bounded investigation whose input is large and whose answer is small.
+  - a HOOK when a recurring, mechanical problem in the tool loop is better handled there than
+    in prose. It acts inside the loop, so it cannot be ignored AND it costs nothing in always-on
+    budget. The recurring shapes: blocking a known-bad call with a reason that teaches the fix;
+    adding a targeted hint to the turn after an error signature that keeps recurring; and
+    refusing to finish before a deliverable exists.
+  - ALWAYS-ON TEXT last, and only for a short rule that genuinely applies to every run. If you
+    add always-on text, cut something else to pay for it.
+
+TWO RULES THAT DISCARD THE WHOLE PROPOSAL. Validation runs before any rollout, and a harness
+that fails it is thrown away entire.
+
+1. EVERY SKILL NEEDS A TRIGGER LINE. If you create or keep `skills/<name>/SKILL.md`, its
+   directory name must appear VERBATIM in `systemprompt.md` or `guardrails.md`, in the SAME edit:
+
+       When <the situation this skill handles>, use the `<name>` skill.
+
+2. EVERY SCRIPT YOU NAME MUST EXIST. A `scripts/<file>.py` invoked from a SKILL.md or from
+   always-on text must ship in the same proposal, a skill's own helper at
+   `skills/<skill-name>/scripts/<file>.py`, invoked from the workspace root as
+   `python3 skills/<skill-name>/scripts/<file>.py`. A helper dropped loose in the skill
+   directory is OFF THE EDITABLE SURFACE and silently discarded."""
+
+
+_TTS_SURFACE_HEAD_HERMES = """\
+# EDITABLE HARNESS SURFACE
+
+You may write ONLY these paths. Anything else is off the editable surface: it is dropped before
+your work is used, however good it is.
+
+| path | component | when it is in context |
+|---|---|---|
+| `systemprompt.md` | c1 persona/procedure | ALWAYS ON -- the start of SOUL.md |
+| `guardrails.md` | c2 always-on rules | ALWAYS ON -- in SOUL.md |
+| `LongTermMEMORY.md` | c3 durable domain facts | ALWAYS ON -- the memory snapshot |
+| `tool_descriptions/tool_guidance.md` | c4 tool prose | ALWAYS ON -- in SOUL.md |
+| `sub_agents/<name>/AGENT.md` | c5 delegated subagent brief | loaded as skill `agent-<name>`, run ON DEMAND via `delegate_task` |
+| `skills/<name>/SKILL.md` | c6 reusable workflow | loaded ON DEMAND via `skill_view` |
+| `scripts/<name>.py` | c7 deterministic helper | run ON DEMAND with the terminal tool as `python3 scripts/<name>.py` |
+| `hooks.json` | c8 shell hooks (a top-level `hooks` object only) | fire INSIDE the tool loop |
+
+Hard rules, each one learned from a previous failure:
+- The single most common failure of this harness family is producing NO deliverable because the
+  model exhausted its output budget on reasoning. Always-on prose makes that WORSE. Prefer an
+  on-demand skill over new always-on prose; if you add always-on text, cut something else.
+- Skills load via `skill_view`, subagent briefs via `skill_view` then `delegate_task`, scripts via
+  the terminal tool.
+- `scripts/*.py` filenames must be snake_case and must compile under py_compile.
+- Never write `SOUL.md`, `MEMORY.md`, `config.yaml` or an `agent-*` skill: the runtime produces
+  those from the files above, and they are not on the editable surface."""
+
+
+_SURFACE_HERMES = "\n\n".join(
+    [_SURFACE_HERMES_HEAD, _surface_part(_SURFACE_OPENCODE, "THE DELIVERABLE'S SHAPE")]
+)
+
 _TTS_INV = """\
 # YOUR DIMENSION: INVARIANT -- how the agent works, independent of the subject
 
@@ -745,7 +856,28 @@ def _build_surface_texts() -> dict[str, _SurfaceText]:
             _surface_part(_SURFACE_CLAUDE, "# HOW TO MAKE A CHANGE"),
         ]
     )
+    hm_tts = "\n\n".join(
+        [
+            _TTS_SURFACE_HEAD_HERMES,
+            _surface_part(_SURFACE_HERMES, "TWO RULES THAT DISCARD", "THE DELIVERABLE'S SHAPE"),
+            _surface_part(_SURFACE_HERMES, "# HOW TO MAKE A CHANGE"),
+        ]
+    )
     return {
+        "hermes": _SurfaceText(
+            surface_md=_SURFACE_HERMES,
+            inv=_INV_TEMPLATE.replace(
+                "__LOOP_LEVER__",
+                "hook in `hooks.json` -- for example, a `pre_verify` hook keeping the agent "
+                "working while no {deliverable} exists, with a corrective reason",
+            ),
+            dom=_DOM_TEMPLATE.replace(
+                "__TRIGGER_SENTENCE__",
+                "A skill exists only once its name appears in the always-on text: write that "
+                "trigger line in the same edit.",
+            ),
+            tts_surface=hm_tts,
+        ),
         "claude_code": _SurfaceText(
             surface_md=_SURFACE_CLAUDE,
             inv=_INV_TEMPLATE.replace(

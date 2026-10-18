@@ -221,6 +221,7 @@ def _check_identity(adapter, args, namespace_dir: Path) -> None:
             "oc": config.SOLVER_MODEL_OC,
             "cx": config.SOLVER_MODEL_CX,
             "cc": config.SOLVER_MODEL_CC,
+            "hm": config.SOLVER_MODEL_HM,
         }[args.substrate],
         "improver": adapter.spec.channels["proposer"].model,
         "judge": config.JUDGE_MODEL,

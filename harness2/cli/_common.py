@@ -31,7 +31,7 @@ from ..core.spec import BenchmarkAdapter
 
 BENCHES = ("jb", "wb", "lab", "local")
 WB_SUBSETS = ("office", "web", "code")
-SUBSTRATES = ("oc", "cx", "cc")
+SUBSTRATES = ("oc", "cx", "cc", "hm")
 
 MODES_DEFAULT = "parallel"
 MODES_HELP = (
@@ -110,7 +110,7 @@ def add_cell_args(p: argparse._ActionsContainer) -> None:
         "--substrate",
         default="oc",
         choices=SUBSTRATES,
-        help="task-executor substrate: oc (opencode) | cx (codex) | cc (claude code)",
+        help="task-executor substrate: oc (opencode) | cx (codex) | cc (claude code) | hm (hermes)",
     )
 
 

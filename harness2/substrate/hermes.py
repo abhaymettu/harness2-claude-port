@@ -378,6 +378,7 @@ class HermesSubstrate:
         launch = launch or Launch.from_config()
         check_root(launch.root)
         try:
+            _as_runner(launch, ["mkdir", "-p", str(launch.root)], check=True, capture_output=True)
             p = _runner(
                 launch,
                 [*launch.hermes, "--version"],
@@ -385,7 +386,7 @@ class HermesSubstrate:
                 cwd="/",
                 timeout=120,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+        except (OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError(f"cannot run {launch.hermes[0]!r}: {exc}") from exc
         if p.returncode != 0 or "Hermes" not in p.stdout:
             raise RuntimeError(

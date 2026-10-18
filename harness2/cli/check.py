@@ -16,10 +16,11 @@
 
 """Check one installed benchmark before running adaptation and judging.
 
-`--conformance` instead runs one live rollout proving that every harness component and the
-operator floor reach the executor (Claude Code only):
+`--conformance` instead runs live rollouts proving that every harness component and the
+operator floor reach the executor (Claude Code and Hermes):
 
     harness2-check --substrate cc --conformance --model claude-haiku-5-5
+    harness2-check --substrate hm --conformance --model claude-haiku-5-5 --provider anthropic
 """
 
 from __future__ import annotations
@@ -32,21 +33,29 @@ from harness2.preflight import check
 
 
 def conformance(args) -> int:
-    from harness2 import conformance as CF
-    from harness2.substrate.claude_code import ClaudeCodeSubstrate
-
-    if args.substrate != "cc":
-        print("FAIL: --conformance is implemented for --substrate cc only")
+    if args.substrate == "cc":
+        from harness2 import conformance as CF
+        from harness2.substrate.claude_code import ClaudeCodeSubstrate as Substrate
+    elif args.substrate == "hm":
+        from harness2 import conformance_hermes as CF
+        from harness2.substrate.hermes import HermesSubstrate as Substrate
+    else:
+        print("FAIL: --conformance is implemented for --substrate cc and hm")
         return 1
     if not args.model:
-        print("FAIL: --conformance needs --model (or HARNESS2_CLAUDE_MODEL)")
+        print(
+            "FAIL: --conformance needs --model (or HARNESS2_CLAUDE_MODEL / HARNESS2_HERMES_MODEL)"
+        )
         return 1
     try:
-        ClaudeCodeSubstrate().preflight()
+        Substrate().preflight()
     except RuntimeError as exc:
         print(f"FAIL: {exc}")
         return 1
-    report = CF.run_claude_code(args.model, args.output)
+    if args.substrate == "hm":
+        report = CF.run_hermes(args.model, args.output, provider=args.provider or None)
+    else:
+        report = CF.run_claude_code(args.model, args.output)
     print(CF.format_report(report))
     return 0 if report["passed"] == 8 and report["floor_ok"] else 1
 
@@ -60,12 +69,15 @@ def main(argv=None):
     p.add_argument("--bench", choices=BENCHES)
     p.add_argument("--subset", choices=("office", "web", "code"))
     p.add_argument("--substrate", choices=SUBSTRATES, default="oc")
-    p.add_argument("--conformance", action="store_true", help="live component probe (cc only)")
+    p.add_argument("--conformance", action="store_true", help="live component probe (cc, hm)")
+    p.add_argument("--model", default=None, help="executor model for --conformance")
     p.add_argument(
-        "--model", default=config.SOLVER_MODEL_CC, help="executor model for --conformance"
+        "--provider", default=config.HERMES_PROVIDER, help="Hermes provider for --conformance"
     )
     p.add_argument("--output", type=Path, default=Path("runs/conformance"))
     args = p.parse_args(argv)
+    if args.model is None:
+        args.model = config.SOLVER_MODEL_HM if args.substrate == "hm" else config.SOLVER_MODEL_CC
     if args.conformance:
         return conformance(args)
     if not args.bench:

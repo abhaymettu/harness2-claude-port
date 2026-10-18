@@ -46,6 +46,7 @@ from ..core import runmark as RM
 from ..core import tree as HT
 from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec, resolve_channel_model
 from ..substrate import claude_code as CC
+from ..substrate import hermes as HM
 from ..substrate.base import Install, RunRequest
 
 TASKS_ROOT = config.ROOT / "localbench" / "tasks"
@@ -78,17 +79,22 @@ _GUARD = (
 
 
 class LocalBenchAdapter:
-    """`--bench local`: the localbench tasks, run under the Claude Code substrate."""
+    """`--bench local`: the localbench tasks, run under Claude Code (cc) or Hermes (hm)."""
 
     def __init__(self, substrate: str = "cc", tasks_root: Path = TASKS_ROOT):
-        if substrate != "cc":
-            raise ValueError(f"localbench runs on --substrate cc only, got {substrate!r}")
+        if substrate not in ("cc", "hm"):
+            raise ValueError(f"localbench runs on --substrate cc or hm, got {substrate!r}")
         given = Path(tasks_root).absolute()
         self.tasks_root = given.resolve()
         self._deny = (str(given), str(self.tasks_root), "localbench", "grade.py", "hidden_tests")
         self._deny += ("/grader", "gr?der")
-        self.substrate = CC.ClaudeCodeSubstrate(launcher=self._launch)
-        self.model = config.SOLVER_MODEL_CC
+        self.kind = substrate
+        if substrate == "hm":
+            self.substrate = HM.HermesSubstrate(launcher=self._launch)
+            self.model = config.SOLVER_MODEL_HM
+        else:
+            self.substrate = CC.ClaudeCodeSubstrate(launcher=self._launch)
+            self.model = config.SOLVER_MODEL_CC
         editor = (
             resolve_channel_model("claude_cli", config.IMPROVER_MODEL)
             if config.IMPROVER_MODEL
@@ -96,8 +102,8 @@ class LocalBenchAdapter:
         )
         self.spec = BenchSpec(
             name="local",
-            runs_root=config.RUNS / "local",
-            install_mode=CC.INSTALL_MODE,
+            runs_root=config.RUNS / ("local" if substrate == "cc" else f"local-{substrate}"),
+            install_mode=HM.INSTALL_MODE if substrate == "hm" else CC.INSTALL_MODE,
             prompts=BenchPrompts(work="complete small data and code tasks in a local workspace"),
             channels={"proposer": editor, "selector": editor},
             leak_globs=("grader/*", "grader/**", "*/grader/*"),
@@ -110,6 +116,13 @@ class LocalBenchAdapter:
         """Operator hooks for every session this benchmark starts, rollouts and improvers."""
         guard = " ".join(shlex.quote(a) for a in (sys.executable, "-I", "-c", _GUARD))
         return {"PreToolUse": [{"hooks": [{"type": "command", "command": guard}]}]}
+
+    @property
+    def rollout_hooks(self) -> dict:
+        """The same guard in Hermes's shell-hook shape; `python3` because the rollout may run as
+        another user who cannot execute this process's interpreter."""
+        guard = " ".join(shlex.quote(a) for a in ("python3", "-I", "-c", _GUARD))
+        return {"pre_tool_call": [{"command": guard}]}
 
     @property
     def floor_env(self) -> dict[str, str]:
@@ -179,7 +192,10 @@ class LocalBenchAdapter:
             )
 
     def preflight(self) -> None:
-        config.require("HARNESS2_CLAUDE_MODEL", needed_by="Claude Code executor rollouts")
+        if self.kind == "hm":
+            config.require("HARNESS2_HERMES_MODEL", needed_by="Hermes executor rollouts")
+        else:
+            config.require("HARNESS2_CLAUDE_MODEL", needed_by="Claude Code executor rollouts")
         self.tasks()
 
     def run_dir(self, run_id: str) -> Path:
@@ -201,7 +217,7 @@ class LocalBenchAdapter:
         if not self.delivered(run_dir):
             raise RuntimeError(
                 f"{run_id}: no deliverable under output/ (rollout "
-                f"{json.loads((run_dir / 'rollout.json').read_text()).get('subtype')}); "
+                f"{self._outcome(run_dir)}); "
                 f"left unmarked so it is re-rolled, not scored as a zero"
             )
         record = json.loads((run_dir / "rollout.json").read_text())
@@ -213,11 +229,30 @@ class LocalBenchAdapter:
         )
         return run_dir
 
+    @staticmethod
+    def _outcome(run_dir: Path) -> str:
+        record = json.loads((Path(run_dir) / "rollout.json").read_text())
+        return str(record.get("subtype") or f"exit {record.get('exit_code')}")
+
     def _launch(self, req: RunRequest, install: Install) -> list[Path]:
         out = []
         for run_id in req.run_ids:
             run_dir = self.run_dir(run_id)
             run_dir.mkdir(parents=True, exist_ok=True)
+            if self.kind == "hm":
+                HM.run_rollout(
+                    install,
+                    run_dir,
+                    self.task_prompt(req.task_ref),
+                    model=self.model,
+                    provider=config.HERMES_PROVIDER or None,
+                    timeout=req.timeout,
+                    task_files=self.task_files(req.task_ref),
+                    hooks=self.rollout_hooks,
+                    env=self.floor_env,
+                )
+                out.append(run_dir)
+                continue
             CC.run_rollout(
                 install,
                 run_dir,
