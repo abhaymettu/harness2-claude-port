@@ -5,13 +5,15 @@
     deny_check.py commit-msg <file>   scan the commit message, refuse attribution trailers
 
 Generic patterns live in this file. Patterns that name a maintainer's private machines or
-accounts belong in `.git/deny-patterns.local`, one regex per line, which git never commits.
-A line `allow: <regex>` there removes its matches before scanning (for example a public
-author identity that would otherwise match a private name).
+accounts stay out of the repository: one regex per line in the file named by env
+`H2_DENY_FILE`, or in `.git/deny-patterns.local` when that is unset. A line `allow: <regex>`
+there removes its matches before scanning (for example a public author identity that would
+otherwise match a private name).
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -45,7 +47,10 @@ def _git(*args: str) -> str:
 
 
 def _local() -> tuple[dict[str, str], list[re.Pattern]]:
-    path = Path(_git("rev-parse", "--git-dir").strip()) / "deny-patterns.local"
+    path = Path(
+        os.environ.get("H2_DENY_FILE")
+        or Path(_git("rev-parse", "--git-dir").strip()) / "deny-patterns.local"
+    ).expanduser()
     deny: dict[str, str] = {}
     allow: list[re.Pattern] = []
     if path.is_file():
