@@ -30,6 +30,7 @@ shared by every benchmark, and the stream-json trajectory renderer.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -214,14 +215,16 @@ def run_rollout(
     timeout: int,
     task_files: Path | None = None,
     hooks: Mapping | None = None,
+    env: Mapping[str, str] | None = None,
     effort: str | None = None,
     claude_bin: str | None = None,
 ) -> dict:
     """One headless session in `run_dir/workspace`; the stream lands in `run_dir/stream.jsonl`.
 
-    Runs in its own process group and is killed whole at `timeout + WALL_SLACK_S`. The return
-    value (also `run_dir/rollout.json`) reports what happened; whether the task was delivered
-    is the benchmark's call, never the exit code's.
+    Runs in its own process group, killed whole when the session ends or at
+    `timeout + WALL_SLACK_S`. `env` is added to the caller's environment (operator hook
+    settings, say). The return value (also `run_dir/rollout.json`) reports what happened;
+    whether the task was delivered is the benchmark's call, never the exit code's.
     """
     run_dir = Path(run_dir)
     workspace = run_dir / "workspace"
@@ -241,30 +244,36 @@ def run_rollout(
     stream = run_dir / "stream.jsonl"
     t0 = time.time()
     timed_out = False
-    with stream.open("wb") as out, (run_dir / "stderr.txt").open("wb") as err:
-        proc = subprocess.Popen(
-            argv,
-            cwd=workspace,
-            env=exec_env(os.environ, model=model),
-            stdin=subprocess.DEVNULL,
-            stdout=out,
-            stderr=err,
-            start_new_session=True,
-        )
-        try:
-            proc.wait(timeout=int(timeout) + WALL_SLACK_S)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
-    record = {
-        "returncode": proc.returncode,
-        "timed_out": timed_out,
-        "wall_s": round(time.time() - t0, 1),
-        "model": model,
-        **result_of(stream),
-    }
-    (run_dir / "rollout.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+    proc = None
+    try:
+        with stream.open("wb") as out, (run_dir / "stderr.txt").open("wb") as err:
+            proc = subprocess.Popen(
+                argv,
+                cwd=workspace,
+                env=exec_env({**os.environ, **(env or {})}, model=model),
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                start_new_session=True,
+            )
+            try:
+                proc.wait(timeout=int(timeout) + WALL_SLACK_S)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+            finally:
+                # Background children outlive the session otherwise, still writing the workspace.
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+    finally:
+        record = {
+            "returncode": proc.returncode if proc else None,
+            "timed_out": timed_out,
+            "wall_s": round(time.time() - t0, 1),
+            "model": model,
+            **result_of(stream),
+        }
+        (run_dir / "rollout.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return record
 
 

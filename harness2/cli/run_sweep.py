@@ -150,7 +150,12 @@ def _main(args: argparse.Namespace) -> int:
     library_root = C.library_root_for(adapter, args.k, seed=args.seed)
     summary_ns = C.summary_namespace(adapter, args.k, seed=args.seed)
     _check_identity(adapter, args, runs_root / summary_ns)
-    prop = Proposer(adapter.spec.channels["proposer"], audit_dir=runs_root / "_audit" / summary_ns)
+    prop = Proposer(
+        adapter.spec.channels["proposer"],
+        audit_dir=runs_root / "_audit" / summary_ns,
+        floor_hooks=getattr(adapter, "floor_hooks", None),
+        floor_env=getattr(adapter, "floor_env", None),
+    )
 
     only = _csv(args.only_domains)
     lanes = args.workers

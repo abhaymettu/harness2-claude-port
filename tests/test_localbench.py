@@ -15,6 +15,7 @@
 """localbench: the shipped tasks grade deterministically, graders stay hidden, rollouts resume."""
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +27,22 @@ from harness2 import config
 from harness2.benchmarks import localbench as LB
 from harness2.core import context
 from harness2.core import runmark as RM
+from harness2.core.spec import ChannelSpec
+
+
+def make_adapter(runs: Path, improver: str = "", **kw) -> LB.LocalBenchAdapter:
+    with (
+        patch.object(config, "RUNS", runs),
+        patch.object(config, "IMPROVER_MODEL", improver),
+        patch.object(config, "SOLVER_MODEL_CC", "claude-haiku-5-5"),
+    ):
+        return LB.LocalBenchAdapter(**kw)
+
+
+def scratch(case: unittest.TestCase) -> Path:
+    tmp = tempfile.TemporaryDirectory()
+    case.addCleanup(tmp.cleanup)
+    return Path(tmp.name)
 
 
 def grade(task: Path, workspace: Path) -> dict:
@@ -41,7 +58,7 @@ def grade(task: Path, workspace: Path) -> dict:
 
 class ShippedTasksTests(unittest.TestCase):
     def setUp(self):
-        self.adapter = LB.LocalBenchAdapter()
+        self.adapter = make_adapter(scratch(self) / "runs")
 
     def test_twelve_tasks_in_three_domains(self):
         domains = [self.adapter.domain_of(t) for t in self.adapter.tasks()]
@@ -78,37 +95,108 @@ class ShippedTasksTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
-    def run_guard(self, tool_input: dict) -> int:
-        adapter = LB.LocalBenchAdapter()
-        argv = ["python3", "-I", "-c", LB._GUARD, str(adapter.tasks_root), "/grader"]
-        event = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
-        return subprocess.run(argv, input=event, text=True).returncode
+    def setUp(self):
+        root = scratch(self)
+        (root / "suite" / "t1").mkdir(parents=True)
+        self.given = root / "suite"
+        self.adapter = make_adapter(root / "runs", tasks_root=self.given)
+        self.command = self.adapter.floor_hooks["PreToolUse"][0]["hooks"][0]["command"]
 
-    def test_floor_hook_refuses_tool_calls_naming_the_graders(self):
-        self.assertEqual(self.run_guard({"command": f"cat {LB.TASKS_ROOT}/x/grader/grade.py"}), 2)
-        self.assertEqual(self.run_guard({"command": "find / -path '*/grader/*'"}), 2)
-        self.assertEqual(self.run_guard({"command": "python3 scripts/clean.py"}), 0)
+    def run_guard(self, command: str, env: dict | None = None) -> tuple[int, str]:
+        event = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+        base = {k: v for k, v in os.environ.items() if k != LB.GUARD_ENV}
+        p = subprocess.run(
+            self.command,
+            shell=True,
+            input=event,
+            text=True,
+            capture_output=True,
+            env={**base, **(self.adapter.floor_env if env is None else env)},
+        )
+        return p.returncode, p.stderr
+
+    def test_hook_refuses_tool_calls_naming_the_tasks_or_checkers(self):
+        blocked = (2, "blocked: that path is outside this task\n")
+        for command in (
+            f"cat {self.given}/t1/files/x.csv",
+            f"ls {self.given.resolve()}",
+            "cat ../GRADER/grade.py",
+            "find / -path '*/gr?der/*'",
+            "ls ~/code/localbench",
+            "python3 grade.py .",
+            "pytest hidden_tests",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_guard(command), blocked)
+        self.assertEqual(self.run_guard("python3 scripts/clean.py"), (0, ""))
+
+    def test_hook_refuses_everything_when_its_environment_is_missing(self):
+        self.assertEqual(
+            self.run_guard("python3 scripts/clean.py", env={}),
+            (2, "blocked: that path is outside this task\n"),
+        )
+
+    def test_hook_command_names_neither_the_tasks_nor_the_checkers(self):
+        self.assertNotIn(str(self.given.resolve()), self.command)
+        self.assertNotIn(str(self.given), self.command)
+        self.assertNotIn("grader", self.command.lower())
+
+    def test_deny_tokens_cover_both_spellings_of_the_tasks_root(self):
+        root = self.given.resolve()
+        self.assertEqual(
+            self.adapter.floor_env,
+            {
+                "H2_GUARD_DENY": os.pathsep.join(
+                    [str(self.given), str(root), "localbench", "grade.py", "hidden_tests"]
+                    + ["/grader", "gr?der"]
+                )
+            },
+        )
+
+
+class AdapterSetupTests(unittest.TestCase):
+    def test_base_tree_is_built_at_construction_and_repaired_whole(self):
+        runs = scratch(self) / "runs"
+        adapter = make_adapter(runs)
+        base = runs / "local" / "base"
+        self.assertEqual(adapter.base_harness(), base)
+        self.assertEqual((base / "systemprompt.md").read_text(), LB.BASE_SYSTEM_PROMPT)
+        (base / "systemprompt.md").write_text("stale\n")
+        (base / "guardrails.md").unlink()
+        make_adapter(runs)
+        self.assertEqual((base / "systemprompt.md").read_text(), LB.BASE_SYSTEM_PROMPT)
+        self.assertEqual((base / "guardrails.md").read_text(), "")
+        self.assertEqual(sorted(p.name for p in base.parent.iterdir()), ["base"])
+
+    def test_editor_channel_defaults_and_honours_a_bare_improver_id(self):
+        runs = scratch(self) / "runs"
+        self.assertEqual(
+            make_adapter(runs).spec.channels["proposer"],
+            ChannelSpec("claude_cli", "claude-opus-5-5"),
+        )
+        self.assertEqual(
+            make_adapter(runs, improver="claude-sonnet-5").spec.channels["selector"],
+            ChannelSpec("claude_cli", "claude-sonnet-5"),
+        )
+
+    def test_editor_channel_refuses_a_provider_prefixed_improver_id(self):
+        with self.assertRaisesRegex(ValueError, "claude_cli channel takes a bare Anthropic id"):
+            make_adapter(scratch(self) / "runs", improver="google-vertex/gemini-x")
 
 
 class ExecuteTests(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = scratch(self)
         task = self.root / "tasks" / "t1"
         (task / "files").mkdir(parents=True)
         (task / "files" / "in.txt").write_text("a\n")
         (task / "task.json").write_text(json.dumps({"domain": "data-cleaning", "timeout": 60}))
         (task / "prompt.md").write_text("Copy in.txt to output/out.txt.\n")
-        with (
-            patch.object(config, "RUNS", self.root / "runs"),
-            patch.object(config, "SOLVER_MODEL_CC", "claude-haiku-5-5"),
-        ):
-            self.adapter = LB.LocalBenchAdapter(tasks_root=self.root / "tasks")
+        self.adapter = make_adapter(self.root / "runs", tasks_root=self.root / "tasks")
         self.calls = []
 
     def fake_rollout(self, install, run_dir, prompt, **kw):
-        self.calls.append((prompt, kw["model"], kw["task_files"]))
+        self.calls.append((prompt, kw["model"], kw["task_files"], kw["hooks"], kw["env"]))
         ws = run_dir / "workspace"
         shutil.copytree(kw["task_files"], ws, dirs_exist_ok=True)
         (ws / "output").mkdir()
@@ -125,6 +213,7 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(
             self.calls[0][:2], ("Copy in.txt to output/out.txt.\n", "claude-haiku-5-5")
         )
+        self.assertEqual(self.calls[0][3:], (self.adapter.floor_hooks, self.adapter.floor_env))
         self.assertTrue(RM.is_complete(run_dir, harness_dir=None))
         self.assertEqual(self.adapter.deliverable_files(run_dir), {"output/out.txt": "a\n"})
 

@@ -21,24 +21,30 @@ No Docker, no cloud, no model judge. Each task is a directory under `localbench/
     files/           the agent's starting working directory
     grader/          hidden: grade.py <workspace> prints {"n_passed", "n_criteria", "checks"}
 
-`grader/` never enters a rollout workspace or a model context: it is outside `files/`, it
-matches `leak_globs`, and the operator floor refuses any tool call that names it.
+`grader/` never enters a rollout workspace or a model context: it is outside `files/` and it
+matches `leak_globs`. The operator floor also refuses any tool call that names the tasks or
+their checkers, in rollouts and improver sessions alike. That hook is a guard against an agent
+wandering into answer keys, not a security boundary: a tool call can reach a path without
+spelling it.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from functools import cached_property
 from pathlib import Path
 
 from .. import config
 from ..core import runmark as RM
 from ..core import tree as HT
-from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec
+from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec, resolve_channel_model
 from ..substrate import claude_code as CC
 from ..substrate.base import Install, RunRequest
 
@@ -57,10 +63,17 @@ BASE_SYSTEM_PROMPT = (
     "path the task gives. Check the deliverable before you finish.\n"
 )
 
-# A PreToolUse hook in the floor: a tool call naming the hidden graders is refused (exit 2).
+# A PreToolUse hook in the floor: a tool call naming any token in H2_GUARD_DENY is refused
+# (exit 2). The tokens travel in the environment and the reason is fixed, so neither the hook
+# command nor its refusal shows the model where the tasks live. An unset variable refuses all.
+GUARD_ENV = "H2_GUARD_DENY"
 _GUARD = (
-    "import json,sys; e=json.load(sys.stdin); s=json.dumps(e.get('tool_input',{})); "
-    "sys.exit(2 if any(t in s for t in sys.argv[1:]) else 0)"
+    "import json,os,sys; e=json.load(sys.stdin).get('tool_input',{}); "
+    "s=json.dumps(e,ensure_ascii=False).lower(); d=os.environ.get('H2_GUARD_DENY'); "
+    "t=[x.lower() for x in (d or '').split(os.pathsep) if x]; "
+    "hit=d is None or any(x in s for x in t); "
+    "hit and print('blocked: that path is outside this task',file=sys.stderr); "
+    "sys.exit(2 if hit else 0)"
 )
 
 
@@ -70,10 +83,17 @@ class LocalBenchAdapter:
     def __init__(self, substrate: str = "cc", tasks_root: Path = TASKS_ROOT):
         if substrate != "cc":
             raise ValueError(f"localbench runs on --substrate cc only, got {substrate!r}")
-        self.tasks_root = Path(tasks_root).resolve()
+        given = Path(tasks_root).absolute()
+        self.tasks_root = given.resolve()
+        self._deny = (str(given), str(self.tasks_root), "localbench", "grade.py", "hidden_tests")
+        self._deny += ("/grader", "gr?der")
         self.substrate = CC.ClaudeCodeSubstrate(launcher=self._launch)
         self.model = config.SOLVER_MODEL_CC
-        editor = ChannelSpec("claude_cli", config.IMPROVER_MODEL or DEFAULT_EDITOR_MODEL)
+        editor = (
+            resolve_channel_model("claude_cli", config.IMPROVER_MODEL)
+            if config.IMPROVER_MODEL
+            else ChannelSpec("claude_cli", DEFAULT_EDITOR_MODEL)
+        )
         self.spec = BenchSpec(
             name="local",
             runs_root=config.RUNS / "local",
@@ -83,6 +103,43 @@ class LocalBenchAdapter:
             leak_globs=("grader/*", "grader/**", "*/grader/*"),
             allow_subagents=True,
         )
+        self._base = self._build_base()
+
+    @property
+    def floor_hooks(self) -> dict:
+        """Operator hooks for every session this benchmark starts, rollouts and improvers."""
+        guard = " ".join(shlex.quote(a) for a in (sys.executable, "-I", "-c", _GUARD))
+        return {"PreToolUse": [{"hooks": [{"type": "command", "command": guard}]}]}
+
+    @property
+    def floor_env(self) -> dict[str, str]:
+        return {GUARD_ENV: os.pathsep.join(self._deny)}
+
+    def _build_base(self) -> Path:
+        """Write the base tree once, swapped in whole so a concurrent reader never sees half."""
+        d = self.spec.runs_root / "base"
+        surface = self.substrate.surface()
+        base = {rel: "" for rel in surface.always_on}
+        base["systemprompt.md"] = BASE_SYSTEM_PROMPT
+        if HT.read_tree(surface, d) == base:
+            return d
+        d.parent.mkdir(parents=True, exist_ok=True)
+        new = Path(tempfile.mkdtemp(prefix=".base-", dir=d.parent))
+        old = Path(tempfile.mkdtemp(prefix=".base-old-", dir=d.parent))
+        try:
+            HT.write_tree(surface, base, new, stubs=False)
+            with contextlib.suppress(FileNotFoundError):
+                os.replace(d, old / "base")
+            try:
+                os.replace(new, d)
+            except OSError:
+                # Another adapter swapped its copy in first; keep it if it is the same tree.
+                if HT.read_tree(surface, d) != base:
+                    raise
+        finally:
+            shutil.rmtree(new, ignore_errors=True)
+            shutil.rmtree(old, ignore_errors=True)
+        return d
 
     @cached_property
     def _meta(self) -> dict[str, dict]:
@@ -111,12 +168,7 @@ class LocalBenchAdapter:
         return self.tasks_root / task_id / "files"
 
     def base_harness(self) -> Path:
-        d = self.spec.runs_root / "base"
-        base = {rel: "" for rel in self.substrate.surface().always_on}
-        base["systemprompt.md"] = BASE_SYSTEM_PROMPT
-        if HT.read_tree(self.substrate.surface(), d) != base:
-            HT.write_tree(self.substrate.surface(), base, d, stubs=False)
-        return d
+        return self._base
 
     def validate_tree(self, tree: HT.Tree) -> None:
         bad = sorted(rel for rel, body in tree.items() if "grader" in body.lower())
@@ -162,11 +214,6 @@ class LocalBenchAdapter:
         return run_dir
 
     def _launch(self, req: RunRequest, install: Install) -> list[Path]:
-        guard = " ".join(
-            shlex.quote(a)
-            for a in (sys.executable, "-I", "-c", _GUARD, str(self.tasks_root), "/grader")
-        )
-        hooks = {"PreToolUse": [{"hooks": [{"type": "command", "command": guard}]}]}
         out = []
         for run_id in req.run_ids:
             run_dir = self.run_dir(run_id)
@@ -178,7 +225,8 @@ class LocalBenchAdapter:
                 model=self.model,
                 timeout=req.timeout,
                 task_files=self.task_files(req.task_ref),
-                hooks=hooks,
+                hooks=self.floor_hooks,
+                env=self.floor_env,
             )
             out.append(run_dir)
         return out

@@ -20,7 +20,8 @@
 
 Generic patterns live in this file. Patterns that name a maintainer's private machines or
 accounts stay out of the repository: one regex per line in the file named by env
-`H2_DENY_FILE`, or in `.git/deny-patterns.local` when that is unset. A line `allow: <regex>`
+`H2_DENY_FILE` (which must exist when set), or in `.git/deny-patterns.local` when that is
+unset. A line `allow: <regex>`
 there removes its matches before scanning (for example a public author identity that would
 otherwise match a private name).
 """
@@ -56,7 +57,11 @@ TRAILERS = r"(?im)^\s*(?:Claude-Session|Co-Authored-By|Generated with|Signed-off
 
 def _git(*args: str) -> str:
     return subprocess.run(
-        ["git", *args], check=True, capture_output=True, text=True, errors="replace"
+        ["git", "-c", "core.quotePath=false", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        errors="replace",
     ).stdout
 
 
@@ -65,6 +70,8 @@ def _local() -> tuple[dict[str, str], list[re.Pattern]]:
         os.environ.get("H2_DENY_FILE")
         or Path(_git("rev-parse", "--git-dir").strip()) / "deny-patterns.local"
     ).expanduser()
+    if os.environ.get("H2_DENY_FILE") and not path.is_file():
+        sys.exit(f"deny_check: H2_DENY_FILE names a missing file ({path}); commit refused")
     deny: dict[str, str] = {}
     allow: list[re.Pattern] = []
     if path.is_file():
@@ -86,19 +93,31 @@ def _hits(text: str, patterns: dict[str, str], allow: list[re.Pattern]) -> list[
 
 
 def _staged_additions() -> dict[str, list[str]]:
-    """path -> added lines, for every added/copied/modified/renamed path in the index."""
-    diff = _git("diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--diff-filter=ACMR")
+    """path -> added lines, for every added/copied/modified/renamed path in the index.
+
+    One diff per path, so the name never has to be parsed back out of a header, and only
+    `+` lines after an `@@` count, so an added line that reads `++ x` is not taken for one.
+    """
+    names = _git("diff", "--cached", "--name-only", "-z", "--no-renames", "--diff-filter=ACMR")
     out: dict[str, list[str]] = {}
-    path = None
-    for line in diff.splitlines():
-        if line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else None
-            if path is not None:
-                out.setdefault(path, [])
-        elif path is not None and line.startswith("+"):
-            out[path].append(line[1:])
-    for name in _git("diff", "--cached", "--name-only", "--diff-filter=ACMR").splitlines():
-        out.setdefault(name, [])
+    for path in filter(None, names.split("\0")):
+        diff = _git(
+            "diff",
+            "--cached",
+            "-U0",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-renames",
+            "--",
+            f":(literal){path}",
+        )
+        lines = out[path] = []
+        in_hunk = False
+        for line in diff.splitlines():
+            if line.startswith("@@"):
+                in_hunk = True
+            elif in_hunk and line.startswith("+"):
+                lines.append(line[1:])
     return out
 
 

@@ -98,6 +98,9 @@ class Proposer:
     attempts: int = 2
     project: str = field(default_factory=lambda: config.VERTEX_PROJECT)
     region: str = field(default_factory=lambda: config.VERTEX_REGION)
+    # The benchmark's operator hooks for claude_cli sessions, and the environment they read.
+    floor_hooks: dict | None = None
+    floor_env: dict | None = None
     _calls: list[Reply] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -225,7 +228,7 @@ class Proposer:
             self.spec.effort,
             *claude_floor.ISOLATION_FLAGS,
             "--settings",
-            json.dumps(claude_floor.floor_settings(cwd)),
+            json.dumps(claude_floor.floor_settings(cwd, hooks=self.floor_hooks)),
         ]
         stdin = mission
         if system:
@@ -241,7 +244,7 @@ class Proposer:
             cmd,
             input=stdin,
             cwd=cwd,
-            env=self.env(),
+            env={**self.env(), **(self.floor_env or {})},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

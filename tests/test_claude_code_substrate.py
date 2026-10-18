@@ -22,6 +22,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -32,6 +33,7 @@ from harness2.core import tree as HT
 from harness2.core.proposer import Proposer
 from harness2.core.spec import BenchPrompts, BenchSpec, ChannelSpec
 from harness2.substrate import claude_code as CC
+from harness2.substrate.base import Install
 
 FIXTURE = Path(__file__).parent / "fixtures" / "claude_code" / "conformance"
 NONCE = "9f111c20"
@@ -83,6 +85,34 @@ class SurfaceTests(unittest.TestCase):
             f"{skill} frontmatter may use only ['description', 'name']; remove ['hooks']", msg
         )
         self.assertIn("remove ['permissionMode']", msg)
+
+    def test_frontmatter_keys_are_read_through_crlf_and_quotes(self):
+        skill = ".claude/skills/probe-skill/SKILL.md"
+        agent = "sub_agents/probe-agent/AGENT.md"
+        msg = self.problems(
+            **{
+                skill: self.tree[skill].replace("name:", "hooks: x\nname:").replace("\n", "\r\n"),
+                agent: self.tree[agent].replace(
+                    "description:", "'permissionMode': x\ndescription:"
+                ),
+            }
+        )
+        self.assertIn(
+            f"{skill} frontmatter may use only ['description', 'name']; remove ['hooks']", msg
+        )
+        self.assertIn("remove ['permissionMode']", msg)
+
+    def test_frontmatter_must_be_a_plain_block_mapping(self):
+        agent = "sub_agents/probe-agent/AGENT.md"
+        msg = self.problems(**{agent: "---\n{description: y, hooks: z}\n---\nReply.\n"})
+        self.assertIn(f"{agent} frontmatter must be a plain block mapping", msg)
+
+    def test_block_lists_and_comments_in_frontmatter_are_allowed(self):
+        agent = "sub_agents/probe-agent/AGENT.md"
+        body = self.tree[agent].replace("---\n", "---\n# probe\ntools:\n  - Bash\n- Read\n", 1)
+        self.assertEqual(
+            HT.validate(CC.CLAUDE_SURFACE, {**self.tree, agent: body})["sub_agents"], 1
+        )
 
     def test_untriggered_skill_is_refused(self):
         guard = self.tree["guardrails.md"].replace("`probe-skill`", "the skill")
@@ -192,6 +222,75 @@ class FloorTests(unittest.TestCase):
         floor = json.loads(cmd[cmd.index("--settings") + 1])
         self.assertIn("/cfg/CLAUDE.md", floor["claudeMdExcludes"])
         self.assertIs(floor["autoMemoryEnabled"], False)
+        self.assertNotIn("hooks", floor)
+
+    def test_improver_session_carries_the_benchmark_hooks_and_their_environment(self):
+        hooks = {"PreToolUse": [{"hooks": [{"type": "command", "command": "guard"}]}]}
+        proposer = Proposer(
+            ChannelSpec("claude_cli", "claude-haiku-5-5"),
+            floor_hooks=hooks,
+            floor_env={"H2_GUARD_DENY": "secret-dir"},
+        )
+        reply = json.dumps({"result": "ok", "subtype": "success", "total_cost_usd": 0.0})
+        done = subprocess.CompletedProcess([], 0, stdout=reply, stderr="")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("harness2.core.proposer.subprocess.run", return_value=done) as run,
+        ):
+            proposer._claude_cli(Path(tmp), "mission", "", 60)
+        cmd = run.call_args.args[0]
+        self.assertEqual(json.loads(cmd[cmd.index("--settings") + 1])["hooks"], hooks)
+        self.assertEqual(run.call_args.kwargs["env"]["H2_GUARD_DENY"], "secret-dir")
+
+
+FAKE_CLAUDE = """#!/bin/sh
+printf '%s' "$H2_PROBE" > env.txt
+(sleep 0.5; echo late > late.txt) &
+echo '{"type":"result","subtype":"success","num_turns":1,"total_cost_usd":0.5,"result":"done"}'
+"""
+
+
+class RolloutProcessTests(unittest.TestCase):
+    def rollout(self, script: str, timeout: int = 60) -> tuple[dict, Path]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "staged").mkdir()
+        binary = root / "claude"
+        binary.write_text(script)
+        binary.chmod(0o755)
+        run_dir = root / "run"
+        run_dir.mkdir()
+        record = CC.run_rollout(
+            Install(staging_dir=root / "staged", fingerprint="f"),
+            run_dir,
+            "do it",
+            model="claude-haiku-5-5",
+            timeout=timeout,
+            env={"H2_PROBE": "probe-value"},
+            claude_bin=str(binary),
+        )
+        return record, run_dir
+
+    def test_background_children_die_with_the_session(self):
+        record, run_dir = self.rollout(FAKE_CLAUDE)
+        time.sleep(1.0)
+        ws = run_dir / "workspace"
+        self.assertFalse((ws / "late.txt").exists())
+        self.assertEqual((ws / "env.txt").read_text(), "probe-value")
+        self.assertEqual(
+            (record["returncode"], record["timed_out"], record["subtype"], record["cost_usd"]),
+            (0, False, "success", 0.5),
+        )
+        self.assertEqual(json.loads((run_dir / "rollout.json").read_text()), record)
+
+    def test_a_timed_out_session_is_killed_and_still_recorded(self):
+        with patch.object(CC, "WALL_SLACK_S", 1):
+            record, run_dir = self.rollout("#!/bin/sh\nsleep 30\n", timeout=0)
+        self.assertEqual(
+            (record["returncode"], record["timed_out"], record["subtype"]), (-9, True, None)
+        )
+        self.assertEqual(json.loads((run_dir / "rollout.json").read_text()), record)
 
 
 class TrajectoryTests(unittest.TestCase):

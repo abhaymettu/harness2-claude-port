@@ -273,15 +273,40 @@ def check_hooks_keys(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
             )
 
 
+_FM_KEY = re.compile(
+    r"""(?:"([A-Za-z_][\w-]*)"|'([A-Za-z_][\w-]*)'|([A-Za-z_][\w-]*))\s*:(?:\s|$)"""
+)
+
+
+def _frontmatter_lines(src: str) -> list[str]:
+    """Lines of a leading `---` YAML block (BOM and CRLF tolerated), or [] when there is none."""
+    m = re.match(r"\ufeff?---\n(.*?)\n---", src.replace("\r\n", "\n"), re.S)
+    return m.group(1).splitlines() if m else []
+
+
 def frontmatter_keys(src: str) -> list[str]:
-    """Top-level keys of a leading `---` YAML block, or [] when there is none."""
-    m = re.match(r"---\n(.*?)\n---", src, re.S)
-    return re.findall(r"^([A-Za-z_][\w-]*)\s*:", m.group(1), re.M) if m else []
+    """Top-level keys of a leading `---` YAML block, quotes dropped, or [] when there is none."""
+    return [
+        next(g for g in m.groups() if g)
+        for ln in _frontmatter_lines(src)
+        if (m := _FM_KEY.match(ln))
+    ]
+
+
+def _plain_frontmatter(src: str) -> bool:
+    """Every top-level line is `key: ...`, so the keys read here are the keys YAML reads."""
+    return all(
+        _FM_KEY.match(ln)
+        for ln in _frontmatter_lines(src)
+        if ln.strip() and not ln.startswith(("#", " ", "\t", "- "))
+    )
 
 
 def _check_frontmatter(rel: str, src: str, allowed: frozenset[str] | None, errs: list[str]) -> None:
     if allowed is None:
         return
+    if not _plain_frontmatter(src):
+        errs.append(f"{rel} frontmatter must be a plain block mapping")
     extra = sorted(set(frontmatter_keys(src)) - allowed)
     if extra:
         errs.append(f"{rel} frontmatter may use only {sorted(allowed)}; remove {extra}")
