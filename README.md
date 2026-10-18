@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/pdf/2610.14224"><img src="https://img.shields.io/badge/Paper-arXiv-EA4335?logo=arxiv&logoColor=white" alt="Paper"></a>
-  <a href="docs/BENCHMARKS.md"><img src="https://img.shields.io/badge/Docs-Benchmark%20guides-FBBC04" alt="Benchmark guides"></a>
+  <a href="docs/QUICKSTART.md"><img src="https://img.shields.io/badge/Docs-Quick%20start-FBBC04" alt="Quick start"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-34A853" alt="License"></a>
 </p>
 
@@ -31,195 +31,156 @@ recursion while keeping model weights fixed:
   with adopted harnesses and evidence-supported lessons from each task to guide
   future refinement.
 
-This repository is an **independent port** that adds a Claude Code executor to
+This repository is an **independent port** that lets Harness² improve
+[Claude Code](https://github.com/anthropics/claude-code) agents, alongside
 upstream's OpenCode and Codex executors. It is not a Google project and is not
-endorsed by the Harness² authors. The Hermes Agent executor port of the same
-method lives at the **harness2-hermes-port** repository, published under the same GitHub account.
-
-What the port adds:
-
-* `--substrate cc`, an executor that runs each rollout as a headless Claude
-  Code session (`claude -p`) in a fresh workspace built from the harness.
-* `--bench local`, 12 small tasks with deterministic checkers, for checking an
-  executor end to end without a judge model, Docker or a cloud project.
-* An isolation floor that harness edits cannot change, a read boundary that
-  keeps the checkers out of reach of the sessions being scored, and a
-  pre-flight that scans the whole git history before publishing.
-
-Checked end to end on all 12 localbench tasks at two stream-order seeds:
-**12/12 tasks ok on both seeds, conformance probe 8/8 with the floor held**.
-The executor already passes every checker at base, so the run validates the
-whole pipeline rather than measuring an adaptation gain. The full record, with
-commands and receipts, is in [VALIDATION.md](VALIDATION.md).
+endorsed by the Harness² authors. A sibling port does the same for Hermes Agent
+at the **harness2-hermes-port** repository, published under the same GitHub
+account.
 
 ## Contents
 
-- [Harness components](#harness-components)
-- [Install](#install)
-- [Quickstart](#quickstart)
-- [The Claude Code executor](#the-claude-code-executor)
-- [localbench](#localbench)
+- [The idea in plain terms](#the-idea-in-plain-terms)
+- [How one task goes](#how-one-task-goes)
 - [Experiments](#experiments)
-- [Web access](#web-access)
-- [Results and resume](#results-and-resume)
-- [Validation](#validation)
+- [What Claude Code brings](#what-claude-code-brings)
+- [Keeping the scores honest](#keeping-the-scores-honest)
+- [What the validation showed](#what-the-validation-showed)
+- [Going further](#going-further)
 - [Citation](#citation)
 - [Contributing](#contributing)
 - [License](#license)
 - [Disclaimer](#disclaimer)
 
-## Harness components
+## The idea in plain terms
 
-Harness² exposes eight editable components around the model: **system prompt,
-guardrails, memory, tool guidance, subagents, skills, scripts, and plugins**.
-Under `--substrate cc`, each one lands in a real Claude Code surface:
+Most ways of making an AI agent better change the model itself, by training it
+on more data. Harness² leaves the model alone and improves everything around
+it instead: the instructions it starts with, the notes it can consult, the
+small tools and scripts it is handed, and the helpers it can delegate to.
 
-| Component | In the rollout |
-|---|---|
-| System prompt | `.claude/systemprompt.md`, passed with `--append-system-prompt-file` |
-| Guardrails, memory, tool guidance | The workspace `CLAUDE.md` |
-| Skills | `.claude/skills/<name>/SKILL.md` |
-| Scripts | `scripts/` |
-| Subagents | `.claude/agents/<name>.md`, run on the executor model |
-| Plugins | Hooks in `.claude/settings.json`; no other settings key is accepted |
+Think of a capable new hire. You cannot change how smart they are, but you can
+give them a better briefing, a better checklist and better tools. Harness²
+does that automatically, one task at a time, and keeps a record of what helped
+so the next task starts from a better place.
 
-## Install
+The unusual part is that it does this **without an answer key**. It never
+looks at the correct answer to a task. It learns by comparing: it runs the
+same task with slightly different setups, looks at how the agent behaved
+differently in each, and keeps the changes that look like they helped.
 
-Use **Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/getting-started/installation/)**.
-From the repository root:
+## How one task goes
 
-```bash
-uv venv --python 3.12 .venv
-source .venv/bin/activate
-uv pip install -e '.[render]'
-harness2-demo --output runs/demo --k 2
+```mermaid
+flowchart LR
+  A[Task arrives] --> B[Run the agent with its current harness]
+  B --> C[Propose edits to the harness]
+  C --> D[Probe: rerun the task with each edit]
+  D --> E[Compose: combine what helped]
+  E --> F[Adopt the refined harness]
+  F --> G[Library of harnesses and lessons]
+  G -. guides the next task .-> A
 ```
 
-The local demo runs both recursion modes with deterministic editors and needs
-no model credentials.
+1. **Run.** The agent attempts the task with its current harness.
+2. **Propose.** A second model, the improver, reads what happened and suggests
+   edits: a clearer instruction, a new checklist item, a helper script.
+3. **Probe.** Each suggested edit is tried on the same task, so the runs can
+   be compared side by side.
+4. **Compose.** The improver looks at how behavior differed between the runs
+   and builds one refined harness from the edits that made a difference.
+5. **Remember.** The adopted harness and a short written lesson go into a
+   library, which the improver consults on later tasks.
 
-The Claude Code executor needs the **`claude` CLI** (tested on Claude Code
-2.1.301 on macOS) and a Claude Code login, subscription or API key; that one
-login covers rollouts and improvers. Google Cloud is optional
-(`HARNESS2_CLAUDE_VIA_VERTEX=1`). The localbench read boundary uses macOS
-`sandbox-exec`; see [localbench](#localbench) for running elsewhere. For the
-upstream benchmarks, see the [setup guide](docs/SETUP.md).
-
-## Quickstart
-
-Check that every component reaches a rollout and that the floor holds, then run
-and judge two localbench tasks:
-
-```bash
-export HARNESS2_CLAUDE_MODEL=claude-haiku-5-5
-harness2-check --substrate cc --conformance
-harness2 --bench local --substrate cc --k 1 --only-domains data-cleaning --max-tasks 2
-harness2-judge --bench local --substrate cc --k 1
-```
-
-The conformance probe runs two rollouts and prints one line per component (C1
-to C8), the floor line and the override line. Judging must use the same
-benchmark, subset, `--k` and seed as the refinement run. Model-backed runs
-incur costs at list price as Claude Code reports them.
-
-## The Claude Code executor
-
-`--substrate cc` runs each rollout as a headless Claude Code session in a fresh
-workspace built from the harness. The improver sessions (editor, composer,
-reflector) use the `claude_cli` channel, so a Claude Code login, subscription
-or API key, is all either needs.
-
-| Variable | Meaning |
-|---|---|
-| `HARNESS2_CLAUDE_MODEL` | Executor model, for example `claude-haiku-5-5` |
-| `HARNESS2_IMPROVER_MODEL` | Improver model on the `claude_cli` channel; localbench defaults to `claude-opus-5-5` |
-
-Every session, rollouts and improvers alike, also gets a floor through
-`--settings` that no harness edit reaches. It excludes your user-level
-`CLAUDE.md` and every `CLAUDE.md` in a parent directory, turns auto-memory off,
-keeps hooks on, denies tools whose effects outlive the session (schedules,
-remote triggers, notifications), and adds the operator's hooks. Sessions run
-with `--setting-sources project --strict-mcp-config --no-session-persistence`,
-and with permission prompts skipped (`--dangerously-skip-permissions`). A
-session runs as you and can read what you can, so run untrusted tasks in a
-container or as a separate user.
-
-## localbench
-
-`--bench local` is a small suite for checking the executor end to end: 12 tasks
-in 3 domains (data cleaning, document-to-table extraction, a small repository
-bugfix), each with a deterministic checker, so it needs no judge model, Docker
-or cloud project. The checkers live in `localbench/tasks/<task>/grader/`,
-outside every workspace and model context.
-
-On macOS every localbench session, rollouts and improvers alike, runs under
-`sandbox-exec`, enforced by the kernel for the whole process tree. A session
-cannot read, write or rename anything under `localbench/tasks/`, the checkout's
-`.git` (which holds every checker as a blob) or Claude Code's session
-transcripts, cannot read or write the run state under `runs/` (scores, other
-rollouts' outputs) outside its own directory, and cannot reach a tmux server or
-send Apple Events, through which it could ask a process outside the sandbox to
-read for it. Links are dropped from a workspace before it is scored. Copies of
-a checker made elsewhere on the machine are outside the boundary, so run
-untrusted executors as a separate user or in a container. Elsewhere set
-`HARNESS2_GRADER_BOUNDARY=off` and run where `localbench/tasks/` is not
-mounted; the only guard left is then a floor hook that refuses tool calls
-naming the tasks, and it matches strings.
+Steps 2 to 4 are the task-level recursion from the paper. Step 5 is the
+harnessing-level recursion: the system gets better at improving itself, not
+just at the task in front of it.
 
 ## Experiments
 
-Scale task-level recursion in two ways: **parallel recursion** explores multiple
-candidate harnesses and composes refinements from their execution evidence;
-**sequential recursion** carries the refined harness and accumulated evidence
-through successive Propose–Probe–Compose steps.
+There are two ways to spend more effort on a task. **Parallel recursion**
+tries several candidate harnesses at once and composes a refinement from all
+of their evidence. **Sequential recursion** takes the refined harness and runs
+Propose–Probe–Compose on it again, several times in a row. The
+[experiment guide](docs/EXPERIMENTS.md) covers both, plus task selection,
+reproducibility and baselines. The upstream benchmarks (JobBench, LAB,
+WorkBuddy-Bench) are described in the [benchmark guides](docs/BENCHMARKS.md);
+that code is unchanged here and was not rerun for this port.
 
-| Option | Behavior |
+## What Claude Code brings
+
+Harness² describes a harness as eight editable parts: **system prompt,
+guardrails, memory, tool guidance, subagents, skills, scripts and plugins**.
+Claude Code already has a native home for every one of them, so an improved
+harness is just a folder Claude Code knows how to read:
+
+| Part of the harness | Where it lives in Claude Code |
 |---|---|
-| `--k 1` | One Propose–Probe–Compose step |
-| `--k K --mode parallel` | Probe `K` general and `K` domain-specific candidates, then produce `K` compositions |
-| `--k K --mode sequential` | Refine the harness through `K` successive steps |
+| System prompt | An extra system prompt file added to the session |
+| Guardrails, memory, tool guidance | The project's `CLAUDE.md` |
+| Skills | `.claude/skills/`, one folder per skill |
+| Scripts | `scripts/` |
+| Subagents | `.claude/agents/`, one file per helper agent |
+| Plugins | Hooks in `.claude/settings.json` |
 
-After each task, harnessing-level recursion retains the adopted harness and
-evidence-supported lessons to guide future refinement. See the
-[experiment guide](docs/EXPERIMENTS.md) for task selection, concurrency,
-reproducibility, and baseline comparisons. The upstream benchmarks (JobBench,
-LAB, WorkBuddy-Bench) and the OpenCode and Codex executors work as upstream
-documents them; that code is unchanged here and was not rerun for this port.
-See the [benchmark guides](docs/BENCHMARKS.md).
+Each attempt runs as a fresh, headless Claude Code session built from that
+folder. Because the harness is made of ordinary Claude Code files, an adopted
+harness is something a person can open, read and reuse by hand.
 
-## Web access
+## Keeping the scores honest
 
-Executor network access is unrestricted, and public benchmark rubrics may be
-online. Configure [network restrictions](docs/EXPERIMENTS.md#web-access) before
-an evaluation that has to be clean.
+An agent that edits its own setup could, in principle, edit its way around
+the test. The port puts three guards in place:
 
-## Results and resume
+* **A fixed floor.** Every session starts from settings that no harness edit
+  can reach. Your personal `CLAUDE.md`, saved memories and other user settings
+  never leak into a run, and tools whose effects would outlive the session,
+  such as schedules and notifications, are switched off.
+* **Hidden checkers.** On macOS, the operating system's sandbox stops every
+  session from reading the scoring scripts, the run history and other runs'
+  results, including any route through another process.
+* **A clean history.** Before publishing, a pre-flight check scans the whole
+  git history for secrets and private paths.
 
-Results are saved under `runs/`, organized by benchmark and subset where
-applicable. They include task summaries, deliverables, adopted harnesses,
-reflection notes, and evaluation results.
+Agents in these runs can still use the internet, and some public benchmark
+rubrics are online, so a strictly clean evaluation needs
+[network restrictions](docs/EXPERIMENTS.md#web-access).
 
-Repeat the same command to resume. Use a new `HARNESS2_RUNS_DIR` when changing
-models or task selection. See [results and resume](docs/EXPERIMENTS.md#results-and-resume)
-for details; each command also supports `--help`.
+## What the validation showed
 
-## Validation
+The port adds **localbench**, 12 small tasks in three areas (cleaning data,
+pulling a table out of a document, fixing a bug in a small repository), each
+scored by a fixed script rather than by another model. That makes it cheap to
+check the whole system end to end.
 
-The executor was run on all 12 localbench tasks at `--k 1` over two
-stream-order seeds, then scored by the deterministic checkers on the selected
-output and on the base output. Executor `claude-haiku-5-5`, improver
-`claude-opus-5-5`; cost is at list price as Claude Code reports it.
+Claude Code ran all 12 tasks twice, with the tasks shuffled into a different
+order each time:
 
-| Executor | Seed | Tasks ok | Base mean (SD) | Adopted mean (SD) | Fallbacks | Library entries | Rollout cost | Improver cost |
-|---|---|---|---|---|---|---|---|---|
-| Claude Code | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 8 | $0.16 | $9.30 |
-| Claude Code | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 8 | $0.17 | $9.20 |
+| Run | Tasks completed | Score before | Score after | Lessons saved | Agent cost | Improver cost |
+|---|---|---|---|---|---|---|
+| Order 1 | 12/12 | 100 | 100 | 8 | $0.16 | $9.30 |
+| Order 2 | 12/12 | 100 | 100 | 8 | $0.17 | $9.20 |
 
-The executor already passes every check at base, so this run shows the whole
-pipeline working and measures no gain from adaptation.
-[VALIDATION.md](VALIDATION.md) has the commands, the conformance probes, the
-isolation tests and the publish pre-flight; it is the full validation record of
-the port, which was validated on both executors at the same commit.
+The agent model was `claude-haiku-5-5` and the improver `claude-opus-5-5`.
+A separate probe confirmed that all eight harness parts reach a real session
+and that the floor holds.
+
+Read the scores carefully: the agent already solved every task before any
+improvement, so there was nothing left to gain. These runs show the machinery
+works from start to finish. They do **not** show that Harness² makes Claude
+Code better; that needs harder tasks. [VALIDATION.md](VALIDATION.md) has every
+command, probe and receipt.
+
+## Going further
+
+* [Quick start](docs/QUICKSTART.md): install, run the offline demo, and try
+  the Claude Code executor.
+* [Setup guide](docs/SETUP.md): requirements, credentials and the upstream
+  benchmarks.
+* [Experiment guide](docs/EXPERIMENTS.md): recursion modes, cost, results and
+  resuming a run.
+* [Upstream changes](UPSTREAM.md): every upstream file this port modifies, and
+  why.
 
 ## Citation
 
@@ -237,7 +198,8 @@ Cite the Harness² paper:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Coding agents should read
+[AGENTS.md](AGENTS.md) first.
 
 ## License
 

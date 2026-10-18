@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """Render installation, JobBench setup, and a run in one terminal line (requires Pillow).
 
@@ -98,7 +100,7 @@ def main():
     font_path = find_font(args.font)
     documented = {
         line.strip()
-        for path in (ROOT / "README.md", ROOT / "docs/BENCHMARKS.md")
+        for path in (ROOT / "README.md", ROOT / "docs/QUICKSTART.md", ROOT / "docs/BENCHMARKS.md")
         for line in path.read_text().splitlines()
     }
     for command in COMMANDS:

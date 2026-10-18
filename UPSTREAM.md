@@ -35,6 +35,8 @@ replaced, and the table says why.
 | `harness2/core/spec.py` | `INSTALL_MODES` gains `hermes_home` | The Hermes substrate's install mode |
 | `harness2/cli/_common.py`, `harness2/cli/run_sweep.py`, `harness2/cli/check.py` | `--substrate hm`; the run identity records the `hm` executor model; `--conformance` runs the Hermes probe, with `--provider` | Select and check the Hermes substrate |
 | `README.md` | Replaced with a README for this port | It describes the port, its two executors, localbench and the measured results, and carries no upstream images |
+| `docs/SETUP.md` | The opening link points at `docs/QUICKSTART.md` instead of the README's install section | The install and first-run steps moved out of the README into `docs/QUICKSTART.md` |
+| `scripts/render_readme_typing.py` | Also reads `docs/QUICKSTART.md` when checking that its commands are documented | The install command it checks now lives there |
 | `CONTRIBUTING.md` | Replaced | Upstream's asks for Google's CLA, which does not apply to this repository |
 | `harness2/core/proposer.py`, `harness2/cli/run_sweep.py` | `Proposer.floor_runner`: a callable giving the command prefix for a `claude_cli` session in its working directory, taken from the adapter's `runner_for` | Improver sessions run under the benchmark's read boundary, as rollouts do |
 | `harness2/config.py` | `GRADER_BOUNDARY` from `HARNESS2_GRADER_BOUNDARY` (`seatbelt` default, `off`) | localbench's checker seal needs macOS `sandbox-exec`; `off` is for a container that never mounts the tasks |

@@ -1,6 +1,6 @@
 # Setup guide
 
-Start with the [quick start](../README.md#install). This guide covers benchmark
+Start with the [quick start](QUICKSTART.md). This guide covers benchmark
 dependencies, model credentials, and the optional Codex executor. For individual
 benchmarks, see the [benchmark guides](BENCHMARKS.md).
 
@@ -163,3 +163,6 @@ A wheel ships the `harness2` package only. The task partitioner,
 `python scripts/split_tasks.py`, requires this source tree. For a wheel
 installation, work from a dedicated directory: `.env`, `dependencies/`, and
 `runs/` are resolved there.
+
+Modified by The harness2-ports Authors: the opening link points at docs/QUICKSTART.md, which
+holds the install steps that were in the README.
