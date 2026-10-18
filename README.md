@@ -45,7 +45,7 @@ account.
 - [Experiments](#experiments)
 - [What Claude Code brings](#what-claude-code-brings)
 - [Keeping the scores honest](#keeping-the-scores-honest)
-- [What the validation showed](#what-the-validation-showed)
+- [What to expect](#what-to-expect)
 - [Going further](#going-further)
 - [Citation](#citation)
 - [Contributing](#contributing)
