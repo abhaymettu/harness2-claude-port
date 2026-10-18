@@ -61,9 +61,9 @@ asks for it.
   `--no-verify`.
 * **Check before publishing.** `scripts/preflight_publish.py` scans the whole git history; run
   it before any push.
-* **Keep claims measured.** The validation shows the pipeline works end to end. It measures no
-  gain from adaptation, because the executor passes every localbench task at base. Do not write
-  otherwise in docs or commit messages.
+* **Keep claims measured.** This port has not been properly tested; the checks so far only ran
+  the pipeline end to end on easy tasks it already solved. Write expectations, not results,
+  and never claim measured improvement in docs or commit messages.
 
 ## Docs
 

@@ -146,30 +146,29 @@ Agents in these runs can still use the internet, and some public benchmark
 rubrics are online, so a strictly clean evaluation needs
 [network restrictions](docs/EXPERIMENTS.md#web-access).
 
-## What the validation showed
+## What to expect
 
-The port adds **localbench**, 12 small tasks in three areas (cleaning data,
-pulling a table out of a document, fixing a bug in a small repository), each
-scored by a fixed script rather than by another model. That makes it cheap to
-check the whole system end to end.
+After each task, a second model (the improver) reads what happened and
+updates the harness folder - the briefing, checklist, skills and scripts the
+agent runs with - so the next task starts from a better place. The loop also
+refines its own improvement process, so with use it should get better at
+improving itself, not only better at the tasks.
 
-Claude Code ran all 12 tasks twice, with the tasks shuffled into a different
-order each time:
+In an ideal solution, a task the agent failed starts passing after a few
+attempts, the harness folder fills with lessons that visibly change how it
+works, and repeat work gets faster and cheaper as the harness settles in.
 
-| Run | Tasks completed | Score before | Score after | Lessons saved | Agent cost | Improver cost |
-|---|---|---|---|---|---|---|
-| Order 1 | 12/12 | 100 | 100 | 8 | $0.16 | $9.30 |
-| Order 2 | 12/12 | 100 | 100 | 8 | $0.17 | $9.20 |
+Over the next few weeks of constant usage, expect the lessons library to
+grow, small wins on repeated chores first, and the improver proposing
+changes you would not have written by hand. The signal to watch is whether
+gains show up on tasks the agent could not already solve - that is what
+separates real improvement from the machinery just running.
 
-The agent model was `claude-haiku-5-5` and the improver `claude-opus-5-5`.
-A separate probe confirmed that all eight harness parts reach a real session
-and that the floor holds.
-
-Read the scores carefully: the agent already solved every task before any
-improvement, so there was nothing left to gain. These runs show the machinery
-works from start to finish. They do **not** show that Harness² makes Claude
-Code better; that needs harder tasks. [VALIDATION.md](VALIDATION.md) has every
-command, probe and receipt.
+That last part is still open. This port has not been properly tested: the
+runs so far were smoke checks on easy tasks the agent already solved, so
+they show the pipeline works end to end, not that it improves anything.
+Better tests, on harder tasks, are needed. [VALIDATION.md](VALIDATION.md)
+records exactly what was run.
 
 ## Going further
 
