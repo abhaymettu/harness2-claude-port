@@ -9,6 +9,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-34A853" alt="License"></a>
 </p>
 
+<p align="center">
+  <em>An independent port of <a href="https://github.com/google-research/harness2">Harness²</a> - not from the original authors.</em>
+</p>
+
+
 A **harness** is the system around a model that enables it to act as an agent:
 prompts, tools, memory, skills, orchestration, and more. **Harnessing** is the
 process of optimizing that system.
