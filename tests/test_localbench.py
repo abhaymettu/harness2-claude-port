@@ -390,6 +390,7 @@ class ReadBoundaryTests(unittest.TestCase):
             self.adapter.deliverable_files(run_dir), {"output/out.txt": "refused errno=1"}
         )
 
+    @unittest.skipIf(LB.HM is None, "the Hermes executor lives in its own repository")
     def test_a_hermes_rollout_cannot_read_the_grader(self):
         fake = self.fake_bin("hermes")
         rollouts = self.root.parent / f"{self.root.name}-rollouts"

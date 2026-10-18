@@ -52,7 +52,10 @@ from ..core import runmark as RM
 from ..core import tree as HT
 from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec, resolve_channel_model
 from ..substrate import claude_code as CC
-from ..substrate import hermes as HM
+try:
+    from ..substrate import hermes as HM
+except ImportError:  # the other executor lives in its own repository
+    HM = None
 from ..substrate.base import Install, RunRequest
 
 TASKS_ROOT = config.ROOT / "localbench" / "tasks"
@@ -165,7 +168,8 @@ def drop_links(root: Path) -> list[str]:
 class LocalBenchAdapter:
     """`--bench local`: the localbench tasks, run under Claude Code (cc) or Hermes (hm)."""
 
-    def __init__(self, substrate: str = "cc", tasks_root: Path = TASKS_ROOT):
+    def __init__(self, substrate: str = "", tasks_root: Path = TASKS_ROOT):
+        substrate = substrate or ("cc" if CC is not None else "hm")
         if substrate not in ("cc", "hm"):
             raise ValueError(f"localbench runs on --substrate cc or hm, got {substrate!r}")
         given = Path(tasks_root).absolute()
