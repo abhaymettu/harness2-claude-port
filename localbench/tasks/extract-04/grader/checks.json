@@ -1,0 +1,102 @@
+{
+  "output": "output/appointments.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "corrected_date_used",
+      "type": "cell",
+      "where": {
+        "name": "Bastian Rook"
+      },
+      "col": "effective_date",
+      "value": "2025-04-07"
+    },
+    {
+      "name": "external_hire_no_previous",
+      "type": "cell",
+      "where": {
+        "name": "Bastian Rook"
+      },
+      "col": "previous_title",
+      "value": ""
+    },
+    {
+      "name": "second_release_appointment",
+      "type": "cell",
+      "where": {
+        "name": "Teodor Vance"
+      },
+      "col": "new_title",
+      "value": "Director of Operations"
+    },
+    {
+      "name": "previous_title_from_text",
+      "type": "cell",
+      "where": {
+        "name": "Teodor Vance"
+      },
+      "col": "previous_title",
+      "value": "Harbor Master"
+    },
+    {
+      "name": "title_with_comma",
+      "type": "cell",
+      "where": {
+        "name": "Sunniva Hale"
+      },
+      "col": "new_title",
+      "value": "Vice President, Fleet"
+    },
+    {
+      "name": "month_name_date",
+      "type": "cell",
+      "where": {
+        "name": "Imelda Corran"
+      },
+      "col": "effective_date",
+      "value": "2025-04-01"
+    },
+    {
+      "name": "dates_iso",
+      "type": "column_regex",
+      "col": "effective_date",
+      "regex": "\\d{4}-\\d{2}-\\d{2}"
+    },
+    {
+      "name": "sorted_by_date_then_name",
+      "type": "order",
+      "cols": [
+        "name"
+      ],
+      "values": [
+        [
+          "Imelda Corran"
+        ],
+        [
+          "Teodor Vance"
+        ],
+        [
+          "Bastian Rook"
+        ],
+        [
+          "Sunniva Hale"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

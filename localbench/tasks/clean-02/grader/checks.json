@@ -1,0 +1,107 @@
+{
+  "output": "output/customers_dedup.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "emails_lowercase",
+      "type": "column_regex",
+      "col": "email",
+      "regex": "[^A-Z\\s]+"
+    },
+    {
+      "name": "latest_timestamp_kept",
+      "type": "cell",
+      "where": {
+        "customer_id": "103"
+      },
+      "col": "name",
+      "value": "Ana R. Ruiz"
+    },
+    {
+      "name": "older_duplicate_dropped",
+      "type": "absent",
+      "where": {
+        "customer_id": "101"
+      }
+    },
+    {
+      "name": "tie_keeps_smallest_id",
+      "type": "cell",
+      "where": {
+        "customer_id": "102"
+      },
+      "col": "name",
+      "value": "Ben Tao"
+    },
+    {
+      "name": "tie_larger_id_dropped",
+      "type": "absent",
+      "where": {
+        "customer_id": "105"
+      }
+    },
+    {
+      "name": "email_trimmed_lowercased",
+      "type": "cell",
+      "where": {
+        "customer_id": "102"
+      },
+      "col": "email",
+      "value": "ben.tao@example.com"
+    },
+    {
+      "name": "padded_email_trimmed",
+      "type": "cell",
+      "where": {
+        "customer_id": "106"
+      },
+      "col": "email",
+      "value": "dev.inge@example.org"
+    },
+    {
+      "name": "sorted_by_customer_id",
+      "type": "order",
+      "cols": [
+        "customer_id"
+      ],
+      "values": [
+        [
+          "102"
+        ],
+        [
+          "103"
+        ],
+        [
+          "104"
+        ],
+        [
+          "106"
+        ],
+        [
+          "110"
+        ],
+        [
+          "111"
+        ],
+        [
+          "112"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

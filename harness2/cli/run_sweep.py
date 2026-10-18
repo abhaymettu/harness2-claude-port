@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """Run one adaptation sweep: every task of a split, domains parallel, tasks in stream order.
 
@@ -210,8 +212,12 @@ def _check_identity(adapter, args, namespace_dir: Path) -> None:
     """Prevent a resumed run or library from silently mixing models or task partitions."""
     identity = {
         "method_version": config.METHOD_VERSION,
-        "executor": config.SOLVER_MODEL_OC if args.substrate == "oc" else config.SOLVER_MODEL_CX,
-        "improver": config.IMPROVER_MODEL,
+        "executor": {
+            "oc": config.SOLVER_MODEL_OC,
+            "cx": config.SOLVER_MODEL_CX,
+            "cc": config.SOLVER_MODEL_CC,
+        }[args.substrate],
+        "improver": adapter.spec.channels["proposer"].model,
         "judge": config.JUDGE_MODEL,
         "project": config.VERTEX_PROJECT,
         "location": config.VERTEX_REGION,

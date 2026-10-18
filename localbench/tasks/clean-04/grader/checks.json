@@ -1,0 +1,108 @@
+{
+  "output": "output/members.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "phone_format",
+      "type": "column_regex",
+      "col": "phone",
+      "regex": "(\\d{3}-\\d{3}-\\d{4})?"
+    },
+    {
+      "name": "crm_name_wins",
+      "type": "cell",
+      "where": {
+        "email": "otto.berg@example.com"
+      },
+      "col": "name",
+      "value": "Otto Berg"
+    },
+    {
+      "name": "city_falls_back_to_signup",
+      "type": "cell",
+      "where": {
+        "email": "otto.berg@example.com"
+      },
+      "col": "city",
+      "value": "Cedar Falls"
+    },
+    {
+      "name": "signup_phone_wins",
+      "type": "cell",
+      "where": {
+        "email": "rhea.sand@example.com"
+      },
+      "col": "phone",
+      "value": "608-555-0110"
+    },
+    {
+      "name": "leading_one_dropped",
+      "type": "cell",
+      "where": {
+        "email": "tam.quill@example.com"
+      },
+      "col": "phone",
+      "value": "608-555-0133"
+    },
+    {
+      "name": "crm_only_plan_none",
+      "type": "cell",
+      "where": {
+        "email": "vera.lyle@example.com"
+      },
+      "col": "plan",
+      "value": "none"
+    },
+    {
+      "name": "signup_only_row_included",
+      "type": "cell",
+      "where": {
+        "email": "wren.adair@example.com"
+      },
+      "col": "name",
+      "value": "Wren Adair"
+    },
+    {
+      "name": "sorted_by_email",
+      "type": "order",
+      "cols": [
+        "email"
+      ],
+      "values": [
+        [
+          "juno.park@example.com"
+        ],
+        [
+          "otto.berg@example.com"
+        ],
+        [
+          "rhea.sand@example.com"
+        ],
+        [
+          "tam.quill@example.com"
+        ],
+        [
+          "vera.lyle@example.com"
+        ],
+        [
+          "wren.adair@example.com"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

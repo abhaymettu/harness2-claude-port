@@ -24,7 +24,10 @@ Apache-2.0 section 4(b) asks that changed files say so. Each file below carries 
 | `harness2/core/prompts.py` | A `claude_code` surface text (paths, Skill and Agent tools, the hooks file) beside the OpenCode and Codex ones; the method text of the stage prompts is unchanged | `_st()` refuses a surface it has no text for, and the existing texts name OpenCode and Codex paths |
 | `harness2/core/tree.py` | Optional per-surface allowlists: top-level keys of the hooks file, and frontmatter keys of skills and sub-agents | A Claude Code settings file or agent frontmatter can carry permissions, environment, MCP servers or hooks; those belong to the operator's floor, not to an editable harness |
 | `harness2/core/spec.py` | `INSTALL_MODES` gains `claude_workspace` | The Claude Code substrate's install mode |
-| `harness2/cli/_common.py` | `--substrate cc` | Select the Claude Code substrate |
+| `harness2/cli/_common.py` | `--substrate cc`, `--bench local` | Select the Claude Code substrate and the local task suite |
+| `harness2/cli/run_sweep.py` | Run identity records the `cc` executor model and the adapter's own editor model | Resume safety for Claude Code sweeps |
+| `harness2/preflight.py` | A self-contained benchmark (`local`) checks only its substrate and its own preflight | localbench has nothing to install and no judge model |
+| `harness2/cli/judge.py` | Skips the judge-model check for `--bench local` | localbench scores with deterministic checkers |
 | `harness2/cli/check.py` | `--conformance` runs the live Claude Code component probe; `--bench` optional with it | Prove every component and the floor reach a rollout |
 
 ## New files
@@ -35,4 +38,5 @@ Apache-2.0 section 4(b) asks that changed files say so. Each file below carries 
 | `harness2/claude_floor.py` | The frozen floor shared by rollouts and improver sessions |
 | `harness2/conformance.py` | The live component and floor probe behind `harness2-check --conformance` |
 | `tests/test_claude_code_substrate.py`, `tests/test_provider_neutral.py` | Unit tests; `tests/fixtures/claude_code/` holds one recorded conformance stream |
+| `harness2/benchmarks/localbench.py`, `localbench/tasks/` | `--bench local`: 12 tasks in 3 domains with deterministic checkers kept out of every workspace and model context; `tests/test_localbench.py` |
 | `.githooks/` | Commit hooks that keep the history publishable |

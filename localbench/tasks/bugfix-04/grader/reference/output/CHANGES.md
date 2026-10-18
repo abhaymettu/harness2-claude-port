@@ -1,0 +1,1 @@
+`DateRange.contains` compared the end with a strict `<`, so the end day was treated as outside the range even though ranges include both ends. That dropped last-day events from `filter_events`, left single-day ranges empty and missed ranges in `ranges_on` on their final day. It now uses `<=` for the end bound, matching `length()`, `days()` and `overlaps()`.

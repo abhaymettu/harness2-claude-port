@@ -1,0 +1,103 @@
+{
+  "output": "output/line_items.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "removed_item_skipped",
+      "type": "absent",
+      "where": {
+        "sku": "BW-0907"
+      }
+    },
+    {
+      "name": "tape_line_total",
+      "type": "cell",
+      "where": {
+        "sku": "BW-2210"
+      },
+      "col": "line_total",
+      "value": "39.00"
+    },
+    {
+      "name": "labels_line_total",
+      "type": "cell",
+      "where": {
+        "sku": "BW-3301"
+      },
+      "col": "line_total",
+      "value": "44.97"
+    },
+    {
+      "name": "description_with_comma",
+      "type": "cell",
+      "where": {
+        "sku": "BW-3301"
+      },
+      "col": "description",
+      "value": "Shipping labels, A4 sheets (box of 100)"
+    },
+    {
+      "name": "unit_price_two_decimals",
+      "type": "cell",
+      "where": {
+        "sku": "BW-4410"
+      },
+      "col": "unit_price",
+      "value": "9.40"
+    },
+    {
+      "name": "quantity_value",
+      "type": "cell",
+      "where": {
+        "sku": "BW-2210"
+      },
+      "col": "quantity",
+      "value": "12"
+    },
+    {
+      "name": "line_total_format",
+      "type": "column_regex",
+      "col": "line_total",
+      "regex": "\\d+\\.\\d{2}"
+    },
+    {
+      "name": "invoice_order",
+      "type": "order",
+      "cols": [
+        "sku"
+      ],
+      "values": [
+        [
+          "BW-1102"
+        ],
+        [
+          "BW-2210"
+        ],
+        [
+          "BW-3301"
+        ],
+        [
+          "BW-1150"
+        ],
+        [
+          "BW-4410"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

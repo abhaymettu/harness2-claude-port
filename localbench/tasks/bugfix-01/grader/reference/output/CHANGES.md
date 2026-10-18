@@ -1,0 +1,1 @@
+`get_page` computed the slice start as `page * per_page`, treating the 1-based page number as if it were 0-based, so page 1 skipped the first `per_page` items and the final page sliced past the end. The start is now `(page - 1) * per_page`, which makes page 1 begin at the first item and the last partial page return its remaining items.

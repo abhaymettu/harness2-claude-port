@@ -1,0 +1,117 @@
+{
+  "output": "output/orders_clean.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "all_dates_iso",
+      "type": "column_regex",
+      "col": "order_date",
+      "regex": "\\d{4}-\\d{2}-\\d{2}"
+    },
+    {
+      "name": "us_date_month_first",
+      "type": "cell",
+      "where": {
+        "order_id": "1003"
+      },
+      "col": "order_date",
+      "value": "2024-04-11"
+    },
+    {
+      "name": "long_month_name_date",
+      "type": "cell",
+      "where": {
+        "order_id": "1001"
+      },
+      "col": "order_date",
+      "value": "2024-03-09"
+    },
+    {
+      "name": "short_month_name_date",
+      "type": "cell",
+      "where": {
+        "order_id": "1010"
+      },
+      "col": "order_date",
+      "value": "2024-03-07"
+    },
+    {
+      "name": "amount_two_decimals",
+      "type": "column_regex",
+      "col": "amount",
+      "regex": "\\d+\\.\\d{2}"
+    },
+    {
+      "name": "amount_symbol_removed",
+      "type": "cell",
+      "where": {
+        "order_id": "1004"
+      },
+      "col": "amount",
+      "value": "1250.00"
+    },
+    {
+      "name": "customer_trimmed",
+      "type": "cell",
+      "where": {
+        "order_id": "1007"
+      },
+      "col": "customer",
+      "value": "Lila Moreno"
+    },
+    {
+      "name": "sorted_by_order_id",
+      "type": "order",
+      "cols": [
+        "order_id"
+      ],
+      "values": [
+        [
+          "1001"
+        ],
+        [
+          "1002"
+        ],
+        [
+          "1003"
+        ],
+        [
+          "1004"
+        ],
+        [
+          "1005"
+        ],
+        [
+          "1006"
+        ],
+        [
+          "1007"
+        ],
+        [
+          "1008"
+        ],
+        [
+          "1009"
+        ],
+        [
+          "1010"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

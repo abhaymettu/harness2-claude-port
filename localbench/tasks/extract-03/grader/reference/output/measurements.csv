@@ -1,0 +1,13 @@
+sample_id,analyte,value_mg_l
+CW-01,Lead,BDL
+CW-01,Manganese,0.0420
+CW-01,Nitrate,1.8500
+CW-02,Iron,0.1200
+CW-02,Lead,0.0054
+CW-02,Manganese,0.0500
+CW-02,Nitrate,2.6000
+CW-03,Iron,0.3100
+CW-03,Lead,0.0031
+CW-03,Nitrate,4.2000
+CW-04,Iron,0.0800
+CW-04,Nitrate,BDL

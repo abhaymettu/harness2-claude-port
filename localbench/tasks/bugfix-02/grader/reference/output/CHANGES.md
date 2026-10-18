@@ -1,0 +1,1 @@
+`to_money` rounded through `float` and the built-in `round`, which uses round-half-to-even and suffers binary representation error, so values such as 0.125 and 2.675 lost a cent. It now quantizes the `Decimal` value directly to cents with `ROUND_HALF_UP`, so halves round away from zero and every caller (line totals, tax and invoice totals) inherits the correct rounding.

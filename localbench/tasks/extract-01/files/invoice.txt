@@ -1,0 +1,23 @@
+INVOICE  No. BW-20417
+Brightwater Supply Co.
+14 Quarry Lane, Fenmore
+
+Bill to:        Kestrel Studio
+Invoice date:   2025-02-03
+Payment terms:  Net 30
+
+Items
+-----
+1. SKU BW-1102  Recycled kraft boxes, medium (pack of 25)   qty 4   @ 18.50 each
+2. SKU BW-2210  Packing tape, clear 48mm                    qty 12  @ 3.25 each
+3. SKU BW-0907  Bubble wrap roll, 30 m                      qty 2   @ 27.00 each   REMOVED (out of stock, not billed)
+4. SKU BW-3301  Shipping labels, A4 sheets (box of 100)     qty 3   @ 14.99 each
+5. SKU BW-1150  Recycled kraft boxes, large (pack of 25)    qty 1   @ 24.75 each
+6. SKU BW-4410  Void fill paper, 5 kg                       qty 5   @ 9.40 each
+
+Subtotal:       229.72
+Sales tax 6%:   13.78
+Total due:      243.50
+
+Thank you for your order. Questions about this invoice can be sent to the
+accounts desk at Brightwater Supply Co.

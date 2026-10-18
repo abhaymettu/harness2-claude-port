@@ -1,0 +1,13 @@
+customer_id,email,name,updated_at
+101,ana.ruiz@example.com,Ana Ruiz,2024-05-01 09:00
+102,Ben.Tao@Example.com,Ben Tao,2024-05-02 10:30
+103,ana.ruiz@example.com,Ana R. Ruiz,2024-06-11 08:15
+104,cleo.marsh@example.net,Cleo Marsh,2024-04-20 12:00
+105,ben.tao@example.com,Benjamin Tao,2024-05-02 10:30
+106, dev.inge@example.org ,Dev Inge,2024-03-03 14:45
+107,CLEO.MARSH@EXAMPLE.NET,Cleo Marsh,2024-04-19 23:59
+108,faye.lund@example.com,Faye Lund,2024-07-07 07:07
+109,dev.inge@example.org,Devin Inge,2024-03-03 14:45
+110,gus.halloran@example.com,Gus Halloran,2024-02-14 16:20
+111,Faye.Lund@example.com,Faye Lund,2024-07-08 07:07
+112,hal.ostrow@example.net,Hal Ostrow,2024-01-09 11:11

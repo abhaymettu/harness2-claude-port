@@ -1,0 +1,87 @@
+{
+  "output": "output/shipments_metric.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "weight_three_decimals",
+      "type": "column_regex",
+      "col": "weight_kg",
+      "regex": "\\d+\\.\\d{3}"
+    },
+    {
+      "name": "length_one_decimal",
+      "type": "column_regex",
+      "col": "length_cm",
+      "regex": "\\d+\\.\\d"
+    },
+    {
+      "name": "grams_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-02"
+      },
+      "col": "weight_kg",
+      "value": "1.200"
+    },
+    {
+      "name": "pounds_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-03"
+      },
+      "col": "weight_kg",
+      "value": "1.361"
+    },
+    {
+      "name": "lbs_spelling_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-06"
+      },
+      "col": "weight_kg",
+      "value": "3.175"
+    },
+    {
+      "name": "ounces_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-04"
+      },
+      "col": "weight_kg",
+      "value": "0.454"
+    },
+    {
+      "name": "inches_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-07"
+      },
+      "col": "length_cm",
+      "value": "47.0"
+    },
+    {
+      "name": "metres_converted",
+      "type": "cell",
+      "where": {
+        "shipment_id": "S-03"
+      },
+      "col": "length_cm",
+      "value": "50.0"
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

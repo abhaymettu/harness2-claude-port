@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """Benchmark dependency and runtime readiness checks."""
 
@@ -26,6 +28,8 @@ from .substrate.opencode import OpencodeSubstrate
 
 
 def check(adapter, *, judge=False) -> list[str]:
+    if adapter.spec.name == "local":
+        return _check_self_contained(adapter)
     missing = missing_runners()
     if missing:
         return [missing]
@@ -141,6 +145,18 @@ def check(adapter, *, judge=False) -> list[str]:
                     errors.append(f"WorkBuddy {role} configuration is stale; rerun setup")
             except (OSError, ValueError, KeyError, TypeError):
                 errors.append(f"WorkBuddy {role} configuration missing; rerun setup")
+    return errors
+
+
+def _check_self_contained(adapter) -> list[str]:
+    """A benchmark that ships its own tasks and deterministic checker needs only its
+    substrate and its own preflight; there is nothing to install and no judge model."""
+    errors = []
+    for validate in (adapter.substrate.preflight, adapter.preflight):
+        try:
+            validate()
+        except (OSError, RuntimeError, ValueError) as exc:
+            errors.append(str(exc))
     return errors
 
 

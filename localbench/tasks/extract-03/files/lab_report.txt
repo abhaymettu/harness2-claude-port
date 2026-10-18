@@ -1,0 +1,27 @@
+CLEARWATER BASIN WATER QUALITY REPORT
+Batch 25-117, analysed by the Clearwater Basin field laboratory
+
+Units: mg/L is milligrams per litre, ug/L is micrograms per litre (1 mg/L = 1000 ug/L).
+A value written with "<" was below the detection limit of the method.
+
+Sample CW-03 (Mill Creek outlet), collected 2025-05-12
+  Nitrate ......... 4.2 mg/L
+  Lead ............ 3.1 ug/L
+  Iron ............ 0.31 mg/L
+
+Sample CW-01 (North intake), collected 2025-05-12
+  Nitrate ......... 1.85 mg/L
+  Lead ............ <1.0 ug/L   (below detection limit)
+  Manganese ....... 42 ug/L
+
+Sample CW-04 (Reservoir spillway), collected 2025-05-13
+  Nitrate ......... <0.10 mg/L   (below detection limit)
+  Iron ............ 0.08 mg/L
+
+Sample CW-02 (Treatment plant inlet), collected 2025-05-12
+  Iron ............ 120 ug/L
+  Nitrate ......... 2.6 mg/L
+  Lead ............ 5.4 ug/L
+  Manganese ....... 0.05 mg/L
+
+All samples were kept at 4 C and analysed within 48 hours of collection.

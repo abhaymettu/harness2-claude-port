@@ -1,0 +1,1 @@
+`parse_line` split on every comma, even while it was inside a double-quoted field, so a quoted value such as `"b,c"` was cut into two fields. The comma branch now only ends a field when the parser is not inside quotes, so commas inside quoted fields stay part of the value for both `parse_line` and `parse`.

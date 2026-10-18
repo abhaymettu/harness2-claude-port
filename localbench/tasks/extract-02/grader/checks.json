@@ -1,0 +1,104 @@
+{
+  "output": "output/deadlines.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "relative_deadline_skipped",
+      "type": "absent",
+      "where": {
+        "section": "3"
+      }
+    },
+    {
+      "name": "appeal_window_skipped",
+      "type": "absent",
+      "where": {
+        "section": "7"
+      }
+    },
+    {
+      "name": "day_month_year_date",
+      "type": "cell",
+      "where": {
+        "section": "1"
+      },
+      "col": "deadline",
+      "value": "2025-03-14"
+    },
+    {
+      "name": "month_day_year_date",
+      "type": "cell",
+      "where": {
+        "section": "4"
+      },
+      "col": "deadline",
+      "value": "2025-04-15"
+    },
+    {
+      "name": "next_year_date",
+      "type": "cell",
+      "where": {
+        "section": "6"
+      },
+      "col": "deadline",
+      "value": "2026-01-31"
+    },
+    {
+      "name": "title_exact",
+      "type": "cell",
+      "where": {
+        "section": "8"
+      },
+      "col": "title",
+      "value": "Site visit availability form"
+    },
+    {
+      "name": "deadline_iso",
+      "type": "column_regex",
+      "col": "deadline",
+      "regex": "\\d{4}-\\d{2}-\\d{2}"
+    },
+    {
+      "name": "sorted_by_deadline_then_section",
+      "type": "order",
+      "cols": [
+        "section"
+      ],
+      "values": [
+        [
+          "1"
+        ],
+        [
+          "4"
+        ],
+        [
+          "8"
+        ],
+        [
+          "2"
+        ],
+        [
+          "5"
+        ],
+        [
+          "6"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}

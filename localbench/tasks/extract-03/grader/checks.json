@@ -1,0 +1,145 @@
+{
+  "output": "output/measurements.csv",
+  "checks": [
+    {
+      "name": "output_parses",
+      "type": "parses"
+    },
+    {
+      "name": "header_exact",
+      "type": "header"
+    },
+    {
+      "name": "row_count",
+      "type": "row_count"
+    },
+    {
+      "name": "below_limit_ug",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-01",
+        "analyte": "Lead"
+      },
+      "col": "value_mg_l",
+      "value": "BDL"
+    },
+    {
+      "name": "below_limit_mg",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-04",
+        "analyte": "Nitrate"
+      },
+      "col": "value_mg_l",
+      "value": "BDL"
+    },
+    {
+      "name": "ug_converted_whole",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-01",
+        "analyte": "Manganese"
+      },
+      "col": "value_mg_l",
+      "value": "0.0420"
+    },
+    {
+      "name": "ug_converted_iron",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-02",
+        "analyte": "Iron"
+      },
+      "col": "value_mg_l",
+      "value": "0.1200"
+    },
+    {
+      "name": "ug_converted_decimal",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-02",
+        "analyte": "Lead"
+      },
+      "col": "value_mg_l",
+      "value": "0.0054"
+    },
+    {
+      "name": "mg_padded",
+      "type": "cell",
+      "where": {
+        "sample_id": "CW-03",
+        "analyte": "Nitrate"
+      },
+      "col": "value_mg_l",
+      "value": "4.2000"
+    },
+    {
+      "name": "value_format",
+      "type": "column_regex",
+      "col": "value_mg_l",
+      "regex": "\\d+\\.\\d{4}|BDL"
+    },
+    {
+      "name": "sorted_by_sample_then_analyte",
+      "type": "order",
+      "cols": [
+        "sample_id",
+        "analyte"
+      ],
+      "values": [
+        [
+          "CW-01",
+          "Lead"
+        ],
+        [
+          "CW-01",
+          "Manganese"
+        ],
+        [
+          "CW-01",
+          "Nitrate"
+        ],
+        [
+          "CW-02",
+          "Iron"
+        ],
+        [
+          "CW-02",
+          "Lead"
+        ],
+        [
+          "CW-02",
+          "Manganese"
+        ],
+        [
+          "CW-02",
+          "Nitrate"
+        ],
+        [
+          "CW-03",
+          "Iron"
+        ],
+        [
+          "CW-03",
+          "Lead"
+        ],
+        [
+          "CW-03",
+          "Nitrate"
+        ],
+        [
+          "CW-04",
+          "Iron"
+        ],
+        [
+          "CW-04",
+          "Nitrate"
+        ]
+      ]
+    },
+    {
+      "name": "full_output_matches",
+      "type": "exact"
+    }
+  ]
+}
