@@ -40,7 +40,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .. import claude_floor, config
 from ..core import runmark as RM
@@ -218,13 +218,15 @@ def run_rollout(
     env: Mapping[str, str] | None = None,
     effort: str | None = None,
     claude_bin: str | None = None,
+    runner: Sequence[str] = (),
 ) -> dict:
     """One headless session in `run_dir/workspace`; the stream lands in `run_dir/stream.jsonl`.
 
     Runs in its own process group, killed whole when the session ends or at
     `timeout + WALL_SLACK_S`. `env` is added to the caller's environment (operator hook
-    settings, say). The return value (also `run_dir/rollout.json`) reports what happened;
-    whether the task was delivered is the benchmark's call, never the exit code's.
+    settings, say), and `runner` prefixes the command (a sandbox that seals paths, say). The
+    return value (also `run_dir/rollout.json`) reports what happened; whether the task was
+    delivered is the benchmark's call, never the exit code's.
     """
     run_dir = Path(run_dir)
     workspace = run_dir / "workspace"
@@ -233,14 +235,17 @@ def run_rollout(
     place(install, workspace)
     floor = claude_floor.write_floor(run_dir / "floor.json", workspace, hooks=hooks)
     spf = workspace / SYSTEM_PROMPT_FILE
-    argv = exec_argv(
-        prompt,
-        model=model,
-        floor_path=floor,
-        system_prompt_file=spf if spf.is_file() and spf.read_text().strip() else None,
-        effort=effort,
-        claude_bin=claude_bin,
-    )
+    argv = [
+        *runner,
+        *exec_argv(
+            prompt,
+            model=model,
+            floor_path=floor,
+            system_prompt_file=spf if spf.is_file() and spf.read_text().strip() else None,
+            effort=effort,
+            claude_bin=claude_bin,
+        ),
+    ]
     stream = run_dir / "stream.jsonl"
     t0 = time.time()
     timed_out = False

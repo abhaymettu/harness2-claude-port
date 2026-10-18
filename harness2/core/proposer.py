@@ -101,6 +101,8 @@ class Proposer:
     # The benchmark's operator hooks for claude_cli sessions, and the environment they read.
     floor_hooks: dict | None = None
     floor_env: dict | None = None
+    # A command prefix for claude_cli sessions (the benchmark's read boundary, say).
+    floor_runner: tuple[str, ...] = ()
     _calls: list[Reply] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -219,6 +221,7 @@ class Proposer:
     ) -> tuple[str, float, str]:
         cli = shutil.which("claude") or "claude"
         cmd = [
+            *self.floor_runner,
             cli,
             "--dangerously-skip-permissions",
             "-p",

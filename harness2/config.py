@@ -120,6 +120,9 @@ HERMES_ROLLOUTS = Path(
 ).expanduser()
 HERMES_PASS_ENV = env("HARNESS2_HERMES_PASS_ENV", "")
 HERMES_PROVIDERS_FILE = env("HARNESS2_HERMES_PROVIDERS_FILE", "")
+# localbench seals its checkers with macOS sandbox-exec; "off" runs without that read boundary
+# (another platform, or a container that never mounts localbench/tasks). See README, localbench.
+GRADER_BOUNDARY = env("HARNESS2_GRADER_BOUNDARY", "seatbelt")
 IMPROVER_MODEL = env("HARNESS2_IMPROVER_MODEL", SOLVER_MODEL_OC)
 JUDGE_MODEL = env("HARNESS2_JUDGE_MODEL", "")
 

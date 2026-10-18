@@ -18,7 +18,9 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -27,6 +29,7 @@ from harness2 import config
 from harness2.benchmarks import localbench as LB
 from harness2.core import context
 from harness2.core import runmark as RM
+from harness2.core.proposer import Proposer
 from harness2.core.spec import ChannelSpec
 
 
@@ -225,6 +228,129 @@ class ExecuteTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "no deliverable under output/"):
                 self.adapter.execute("t1", None, "ns/t1/base1")
         self.assertIsNone(RM.read_mark(self.adapter.run_dir("ns/t1/base1")))
+
+
+SECRET = "PLANTED-ANSWER-KEY"
+
+# Both fakes try to read the grader the rollout must never see, and deliver what they got.
+PLANTED_READ = textwrap.dedent(
+    """
+    import os, sys
+    if sys.argv[1:] == ["--version"]:
+        sys.exit(0)
+    os.makedirs("output", exist_ok=True)
+    try:
+        got = open({grader!r}).read()
+    except OSError as e:
+        got = "refused errno=%d" % e.errno
+    open("output/out.txt", "w").write(got)
+    """
+)
+
+
+@unittest.skipUnless(Path(LB.SANDBOX_EXEC).is_file(), "the read boundary is macOS sandbox-exec")
+class ReadBoundaryTests(unittest.TestCase):
+    """A planted read of a grader fails at the OS, by every route, in every session kind."""
+
+    def setUp(self):
+        self.root = scratch(self).resolve()
+        task = self.root / "tasks" / "t1"
+        (task / "files").mkdir(parents=True)
+        (task / "grader").mkdir()
+        (task / "files" / "in.txt").write_text("a\n")
+        (task / "task.json").write_text(json.dumps({"domain": "data-cleaning", "timeout": 60}))
+        (task / "prompt.md").write_text("Copy in.txt to output/out.txt.\n")
+        self.grader = task / "grader" / "grade.py"
+        self.grader.write_text(f"print({SECRET!r})\n")
+        git = ["git", "-C", str(self.root), "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run([*git, "init", "-q"], check=True)
+        subprocess.run([*git, "add", "-A"], check=True)
+        subprocess.run([*git, "commit", "-qm", "tasks"], check=True)
+        # Rollout workspaces live inside the checkout, as under runs/ in this repo.
+        self.ws = self.root / "runs" / "ws"
+        self.ws.mkdir(parents=True)
+        (self.ws / "mine.txt").write_text("workspace file\n")
+        (self.ws / "link").symlink_to(self.root / "tasks")
+        self.adapter = make_adapter(self.root / "runs", tasks_root=self.root / "tasks")
+
+    def read(self, argv: list[str], *, sealed: bool) -> subprocess.CompletedProcess:
+        prefix = list(self.adapter.floor_runner) if sealed else []
+        return subprocess.run(
+            prefix + argv, cwd=self.ws, capture_output=True, text=True, timeout=60
+        )
+
+    def test_the_tasks_root_and_the_git_object_store_are_sealed(self):
+        self.assertEqual(
+            LB.sealed_paths(self.root / "tasks"), (self.root / "tasks", self.root / ".git")
+        )
+
+    def test_planted_reads_of_a_grader_fail_by_every_route(self):
+        routes = {
+            "absolute path": ["cat", str(self.grader)],
+            "relative path": ["sh", "-c", "cat ../../tasks/t1/grader/grade.py"],
+            "symlink": ["cat", "link/t1/grader/grade.py"],
+            "git object store": [
+                "git",
+                "-C",
+                str(self.root),
+                "show",
+                "HEAD:tasks/t1/grader/grade.py",
+            ],
+            "interpreter": ["python3", "-c", f"print(open({str(self.grader)!r}).read())"],
+            "directory listing": ["ls", str(self.grader.parent)],
+        }
+        for route, argv in routes.items():
+            with self.subTest(route=route):
+                self.assertIn(
+                    SECRET if route != "directory listing" else "grade.py",
+                    self.read(argv, sealed=False).stdout,
+                )
+                p = self.read(argv, sealed=True)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertNotIn(SECRET, p.stdout)
+                self.assertNotIn("grade.py", p.stdout)
+        self.assertEqual(self.read(["cat", "mine.txt"], sealed=True).stdout, "workspace file\n")
+
+    def fake_bin(self, name: str) -> Path:
+        bindir = self.root.parent / f"{self.root.name}-bin"
+        bindir.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, bindir, ignore_errors=True)
+        fake = bindir / name
+        fake.write_text(f"#!{sys.executable}\n" + PLANTED_READ.format(grader=str(self.grader)))
+        fake.chmod(0o755)
+        return fake
+
+    def test_a_claude_code_rollout_cannot_read_the_grader(self):
+        fake = self.fake_bin("claude")
+        with patch.dict(os.environ, {"PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}"}):
+            run_dir = self.adapter.execute("t1", None, "ns/t1/base1")
+        self.assertEqual(
+            self.adapter.deliverable_files(run_dir), {"output/out.txt": "refused errno=1"}
+        )
+
+    def test_a_hermes_rollout_cannot_read_the_grader(self):
+        fake = self.fake_bin("hermes")
+        rollouts = self.root.parent / f"{self.root.name}-rollouts"
+        self.addCleanup(shutil.rmtree, rollouts, ignore_errors=True)
+        with (
+            patch.object(config, "SOLVER_MODEL_HM", "m"),
+            patch.object(config, "HERMES_CMD", str(fake)),
+            patch.object(config, "HERMES_ROLLOUTS", rollouts),
+        ):
+            adapter = make_adapter(
+                self.root / "runs", tasks_root=self.root / "tasks", substrate="hm"
+            )
+            run_dir = adapter.execute("t1", None, "ns/t1/base1")
+        self.assertEqual(adapter.deliverable_files(run_dir), {"output/out.txt": "refused errno=1"})
+
+    def test_improver_sessions_run_under_the_same_boundary(self):
+        prop = Proposer(ChannelSpec("claude_cli", "m"), floor_runner=self.adapter.floor_runner)
+        done = subprocess.CompletedProcess([], 0, stdout='{"result": "ok"}', stderr="")
+        with patch("harness2.core.proposer.subprocess.run", return_value=done) as run:
+            prop._claude_cli(self.ws, "mission", "", 60)
+        cmd = run.call_args.args[0]
+        self.assertEqual(tuple(cmd[:3]), self.adapter.floor_runner)
+        self.assertTrue(cmd[3].endswith("claude"))
 
 
 if __name__ == "__main__":
