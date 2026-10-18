@@ -22,11 +22,15 @@ No Docker, no cloud, no model judge. Each task is a directory under `localbench/
     grader/          hidden: grade.py <workspace> prints {"n_passed", "n_criteria", "checks"}
 
 `grader/` never enters a rollout workspace or a model context: it is outside `files/` and it
-matches `leak_globs`. Every rollout and improver session runs under a read boundary: macOS
-sandbox-exec denies reads under the tasks root and under the object store of the git checkout
-that holds it, for the whole process tree, by whatever route a call takes (a relative path, a
-link, `git show`, an interpreter). The operator floor also refuses tool calls that name the
-tasks or their checkers, which spares the agent turns spent on paths it cannot read.
+matches `leak_globs`. Every rollout and improver session runs under macOS sandbox-exec, which
+the kernel enforces for the whole process tree: no reads, writes or renames under the tasks
+root, the object store of the git checkout that holds it, or Claude Code's session
+transcripts; no reads or writes of the run state (scores, other rollouts' outputs) outside the
+session's own directory; no tmux server and no Apple Events, through which a process could ask
+something outside the sandbox to read for it. Links are dropped from a workspace before this
+process reads or scores it. The boundary does not cover copies of a checker made elsewhere on
+the machine. The operator floor also refuses tool calls that name the tasks or their checkers,
+which spares the agent turns spent on paths it cannot read.
 """
 
 from __future__ import annotations
@@ -43,7 +47,7 @@ import tempfile
 from functools import cached_property
 from pathlib import Path
 
-from .. import config
+from .. import claude_floor, config
 from ..core import runmark as RM
 from ..core import tree as HT
 from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec, resolve_channel_model
@@ -84,8 +88,9 @@ SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 
 
 def sealed_paths(tasks_root: Path) -> tuple[Path, ...]:
-    """Every place the checkers' bytes live: the tasks root and, when the suite sits in a git
-    checkout, its object store (from which `git show` would print any grader)."""
+    """Every place a checker's bytes can sit: the tasks root, the object store of the git
+    checkout that holds it (`git show` would print any grader) and Claude Code's session
+    transcripts (a session that read a grader keeps a copy)."""
     paths = [Path(tasks_root).resolve()]
     with contextlib.suppress(OSError):
         p = subprocess.run(
@@ -102,11 +107,21 @@ def sealed_paths(tasks_root: Path) -> tuple[Path, ...]:
         )
         if p.returncode == 0 and p.stdout.strip():
             paths.append(Path(p.stdout.strip()).resolve())
-    return tuple(paths)
+    paths += [d / "projects" for d in claude_floor.user_config_dirs()]
+    return tuple(dict.fromkeys(paths))
 
 
-def read_boundary(paths: tuple[Path, ...]) -> tuple[str, ...]:
-    """A command prefix under which no process in the tree can read anything under `paths`."""
+def _sb(path: Path) -> str:
+    return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def read_boundary(
+    sealed: tuple[Path, ...], *, runs: Path | None = None, own: Path | None = None
+) -> tuple[str, ...]:
+    """A command prefix under which no process in the tree can read, write or move anything
+    under `sealed`, nor read or write the run state under `runs` (scores, other rollouts'
+    outputs) outside `own`, the session's own directory, nor ask a tmux server or another app
+    to read for it."""
     if config.GRADER_BOUNDARY == "off":
         return ()
     if config.GRADER_BOUNDARY != "seatbelt" or not Path(SANDBOX_EXEC).is_file():
@@ -115,9 +130,36 @@ def read_boundary(paths: tuple[Path, ...]) -> tuple[str, ...]:
             f"run rollouts where localbench/tasks is not mounted and set "
             f"HARNESS2_GRADER_BOUNDARY=off"
         )
-    quoted = (str(p).replace("\\", "\\\\").replace('"', '\\"') for p in paths)
-    rules = "".join(f'(deny file-read* (subpath "{q}"))' for q in quoted)
-    return (SANDBOX_EXEC, "-p", f"(version 1)(allow default){rules}")
+    rules = [f"(deny file-read* file-write* (subpath {_sb(p)}))" for p in sealed]
+    walls = list(sealed)
+    if runs is not None:
+        # Metadata stays readable there: Claude Code refuses a settings file in `own` whose
+        # path components it cannot stat.
+        rules.append(f"(deny file-read-data file-read-xattr file-write* (subpath {_sb(runs)}))")
+        walls.append(Path(runs))
+        if own is not None:
+            # Same operations as the deny: Seatbelt lets a named operation beat a wildcard.
+            ops = "file-read-data file-read-xattr file-write*"
+            rules.append(f"(allow {ops} (subpath {_sb(Path(own).resolve())}))")
+    # Renaming a parent would carry a sealed path out from under its rule.
+    parents = sorted({a for p in walls for a in Path(p).parents if a != a.parent})
+    rules += [f"(deny file-write-unlink (literal {_sb(a)}))" for a in parents]
+    rules.append('(deny network-outbound (remote unix-socket (path-regex #"^/private/tmp/tmux-")))')
+    rules.append("(deny appleevent-send)")
+    return (SANDBOX_EXEC, "-p", "(version 1)(allow default)" + "".join(rules))
+
+
+def drop_links(root: Path) -> list[str]:
+    """Remove every link under `root`, before this unsandboxed process reads or scores it: a
+    deliverable that links into the tasks would otherwise be read, and graded, as an answer."""
+    dropped = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in dirnames + filenames:
+            if (p := Path(dirpath, name)).is_symlink():
+                p.unlink()
+                dropped.append(p.relative_to(root).as_posix())
+        dirnames[:] = [d for d in dirnames if Path(dirpath, d).is_dir()]
+    return sorted(dropped)
 
 
 class LocalBenchAdapter:
@@ -131,6 +173,7 @@ class LocalBenchAdapter:
         self._deny = (str(given), str(self.tasks_root), "localbench", "grade.py", "hidden_tests")
         self._deny += ("/grader", "gr?der")
         self.kind = substrate
+        self._runs = config.RUNS
         if substrate == "hm":
             self.substrate = HM.HermesSubstrate(launcher=self._launch)
             self.model = config.SOLVER_MODEL_HM
@@ -167,9 +210,12 @@ class LocalBenchAdapter:
         return {"pre_tool_call": [{"command": guard}]}
 
     @cached_property
-    def floor_runner(self) -> tuple[str, ...]:
-        """The read boundary every session this benchmark starts runs under."""
-        return read_boundary(sealed_paths(self.tasks_root))
+    def _sealed(self) -> tuple[Path, ...]:
+        return sealed_paths(self.tasks_root)
+
+    def runner_for(self, own: Path | None) -> tuple[str, ...]:
+        """The boundary a session of this benchmark runs under; `own` is its directory."""
+        return read_boundary(self._sealed, runs=self._runs.resolve(), own=own)
 
     @property
     def floor_env(self) -> dict[str, str]:
@@ -244,7 +290,7 @@ class LocalBenchAdapter:
         else:
             config.require("HARNESS2_CLAUDE_MODEL", needed_by="Claude Code executor rollouts")
         self.tasks()
-        self.floor_runner
+        self.runner_for(None)
 
     def run_dir(self, run_id: str) -> Path:
         return self.spec.runs_root / "executions" / run_id
@@ -262,6 +308,7 @@ class LocalBenchAdapter:
             self.substrate.execute(task_id, install, [run_id], limit)
         finally:
             shutil.rmtree(install.staging_dir, ignore_errors=True)
+        dropped = drop_links(run_dir / "workspace")
         if not self.delivered(run_dir):
             raise RuntimeError(
                 f"{run_id}: no deliverable under output/ (rollout "
@@ -273,7 +320,11 @@ class LocalBenchAdapter:
             run_dir,
             run_id=run_id,
             harness_dir=harness_dir,
-            extra={"cost_usd": record.get("cost_usd"), "model": self.model},
+            extra={
+                "cost_usd": record.get("cost_usd"),
+                "model": self.model,
+                "dropped_links": dropped,
+            },
         )
         return run_dir
 
@@ -290,7 +341,8 @@ class LocalBenchAdapter:
             if self.kind == "hm":
                 # The boundary goes after the runner: sandbox-exec cannot start a setuid sudo.
                 launch = HM.Launch.from_config()
-                launch = dataclasses.replace(launch, runner=(*launch.runner, *self.floor_runner))
+                runner = (*launch.runner, *self.runner_for(None))
+                launch = dataclasses.replace(launch, runner=runner)
                 HM.run_rollout(
                     install,
                     run_dir,
@@ -314,7 +366,7 @@ class LocalBenchAdapter:
                 task_files=self.task_files(req.task_ref),
                 hooks=self.floor_hooks,
                 env=self.floor_env,
-                runner=self.floor_runner,
+                runner=self.runner_for(run_dir),
             )
             out.append(run_dir)
         return out

@@ -285,17 +285,31 @@ class ReadBoundaryTests(unittest.TestCase):
         self.ws.mkdir(parents=True)
         (self.ws / "mine.txt").write_text("workspace file\n")
         (self.ws / "link").symlink_to(self.root / "tasks")
+        # What else a rollout could learn the answers from: scores, a neighbour's passing
+        # output, and a session transcript that once read the grader.
+        self.leaks = {
+            "judged scores": self.root / "runs" / "local" / "adapt" / "ns" / "judged.json",
+            "neighbour output": self.root / "runs" / "local" / "executions" / "ns" / "t2" / "out",
+            "transcript": self.root / "cfg" / "projects" / "s" / "session.jsonl",
+        }
+        for path in self.leaks.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"{SECRET}\n")
+        configs = patch.object(LB.claude_floor, "user_config_dirs", lambda: [self.root / "cfg"])
+        configs.start()
+        self.addCleanup(configs.stop)
         self.adapter = make_adapter(self.root / "runs", tasks_root=self.root / "tasks")
 
     def read(self, argv: list[str], *, sealed: bool) -> subprocess.CompletedProcess:
-        prefix = list(self.adapter.floor_runner) if sealed else []
+        prefix = list(self.adapter.runner_for(self.ws)) if sealed else []
         return subprocess.run(
             prefix + argv, cwd=self.ws, capture_output=True, text=True, timeout=60
         )
 
-    def test_the_tasks_root_and_the_git_object_store_are_sealed(self):
+    def test_sealed_paths_cover_checkers_git_and_transcripts(self):
         self.assertEqual(
-            LB.sealed_paths(self.root / "tasks"), (self.root / "tasks", self.root / ".git")
+            LB.sealed_paths(self.root / "tasks"),
+            (self.root / "tasks", self.root / ".git", self.root / "cfg" / "projects"),
         )
 
     def test_planted_reads_of_a_grader_fail_by_every_route(self):
@@ -324,6 +338,40 @@ class ReadBoundaryTests(unittest.TestCase):
                 self.assertNotIn(SECRET, p.stdout)
                 self.assertNotIn("grade.py", p.stdout)
         self.assertEqual(self.read(["cat", "mine.txt"], sealed=True).stdout, "workspace file\n")
+
+    def test_scores_neighbours_and_transcripts_are_sealed_too(self):
+        for what, path in self.leaks.items():
+            with self.subTest(what=what):
+                self.assertIn(SECRET, self.read(["cat", str(path)], sealed=False).stdout)
+                p = self.read(["cat", str(path)], sealed=True)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertNotIn(SECRET, p.stdout)
+
+    def test_a_grader_can_be_neither_moved_out_nor_rewritten(self):
+        away = self.root.parent / f"{self.root.name}-away"
+        self.addCleanup(shutil.rmtree, away, ignore_errors=True)
+        attempts = {
+            "move the grader out": ["mv", str(self.grader.parent), str(away)],
+            "move a parent out": ["mv", str(self.root), str(away)],
+            "move the tasks root out": ["mv", str(self.root / "tasks"), str(away)],
+            "rewrite the grader": ["sh", "-c", f"echo 'print(1)' > {self.grader}"],
+        }
+        for what, argv in attempts.items():
+            with self.subTest(what=what):
+                self.assertNotEqual(self.read(argv, sealed=True).returncode, 0)
+                self.assertFalse(away.exists())
+                self.assertEqual(self.grader.read_text(), f"print({SECRET!r})\n")
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux is not installed")
+    def test_a_tmux_server_outside_the_sandbox_cannot_be_asked_to_read(self):
+        server = ["tmux", "-L", f"h2test-{os.getpid()}"]
+        subprocess.run([*server, "new-session", "-d"], check=True)
+        self.addCleanup(subprocess.run, [*server, "kill-server"], capture_output=True)
+        out = self.ws / "via-tmux.txt"
+        p = self.read([*server, "new-session", "-d", f"cat {self.grader} > {out}"], sealed=True)
+        self.assertNotEqual(p.returncode, 0)
+        subprocess.run(["sleep", "1"])
+        self.assertFalse(out.exists())
 
     def fake_bin(self, name: str) -> Path:
         bindir = self.root.parent / f"{self.root.name}-bin"
@@ -357,13 +405,25 @@ class ReadBoundaryTests(unittest.TestCase):
             run_dir = adapter.execute("t1", None, "ns/t1/base1")
         self.assertEqual(adapter.deliverable_files(run_dir), {"output/out.txt": "refused errno=1"})
 
-    def test_improver_sessions_run_under_the_same_boundary(self):
-        prop = Proposer(ChannelSpec("claude_cli", "m"), floor_runner=self.adapter.floor_runner)
+    def test_a_deliverable_that_links_to_the_grader_is_dropped_before_scoring(self):
+        fake = self.fake_bin("claude")
+        fake.write_text(
+            f"#!{sys.executable}\nimport os\nos.makedirs('output', exist_ok=True)\n"
+            f"os.symlink({str(self.grader)!r}, 'output/out.txt')\n"
+        )
+        with patch.dict(os.environ, {"PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}"}):
+            with self.assertRaisesRegex(RuntimeError, "no deliverable under output/"):
+                self.adapter.execute("t1", None, "ns/t1/base1")
+        out = self.adapter.run_dir("ns/t1/base1") / "workspace" / "output"
+        self.assertEqual(list(out.iterdir()), [])
+
+    def test_improver_sessions_run_under_the_boundary_with_their_own_directory(self):
+        prop = Proposer(ChannelSpec("claude_cli", "m"), floor_runner=self.adapter.runner_for)
         done = subprocess.CompletedProcess([], 0, stdout='{"result": "ok"}', stderr="")
         with patch("harness2.core.proposer.subprocess.run", return_value=done) as run:
             prop._claude_cli(self.ws, "mission", "", 60)
         cmd = run.call_args.args[0]
-        self.assertEqual(tuple(cmd[:3]), self.adapter.floor_runner)
+        self.assertEqual(tuple(cmd[:3]), self.adapter.runner_for(self.ws))
         self.assertTrue(cmd[3].endswith("claude"))
 
 

@@ -36,7 +36,7 @@ section it adds, and the table says why.
 | `harness2/core/spec.py` | `INSTALL_MODES` gains `hermes_home` | The Hermes substrate's install mode |
 | `harness2/cli/_common.py`, `harness2/cli/run_sweep.py`, `harness2/cli/check.py` | `--substrate hm`; the run identity records the `hm` executor model; `--conformance` runs the Hermes probe, with `--provider` | Select and check the Hermes substrate |
 | `README.md` | "Claude Code executor", "localbench", "Hermes executor" and "Validation" sections, and their entries in Contents | Quickstarts, the component mappings and gaps, the grader boundary, and the measured results |
-| `harness2/core/proposer.py`, `harness2/cli/run_sweep.py` | `Proposer.floor_runner`: a command prefix for `claude_cli` sessions, taken from the adapter's `floor_runner` | Improver sessions run under the benchmark's read boundary, as rollouts do |
+| `harness2/core/proposer.py`, `harness2/cli/run_sweep.py` | `Proposer.floor_runner`: a callable giving the command prefix for a `claude_cli` session in its working directory, taken from the adapter's `runner_for` | Improver sessions run under the benchmark's read boundary, as rollouts do |
 | `harness2/config.py` | `GRADER_BOUNDARY` from `HARNESS2_GRADER_BOUNDARY` (`seatbelt` default, `off`) | localbench's checker seal needs macOS `sandbox-exec`; `off` is for a container that never mounts the tasks |
 
 ## New files

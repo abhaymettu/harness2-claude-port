@@ -32,6 +32,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -101,8 +102,9 @@ class Proposer:
     # The benchmark's operator hooks for claude_cli sessions, and the environment they read.
     floor_hooks: dict | None = None
     floor_env: dict | None = None
-    # A command prefix for claude_cli sessions (the benchmark's read boundary, say).
-    floor_runner: tuple[str, ...] = ()
+    # The command prefix for a claude_cli session working in a directory (the benchmark's read
+    # boundary, say).
+    floor_runner: Callable[[Path], Sequence[str]] | None = None
     _calls: list[Reply] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -221,7 +223,7 @@ class Proposer:
     ) -> tuple[str, float, str]:
         cli = shutil.which("claude") or "claude"
         cmd = [
-            *self.floor_runner,
+            *(self.floor_runner(cwd) if self.floor_runner else ()),
             cli,
             "--dangerously-skip-permissions",
             "-p",

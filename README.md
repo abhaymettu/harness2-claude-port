@@ -192,11 +192,17 @@ model, Docker or cloud project. The checkers live in `localbench/tasks/<task>/gr
 every workspace and model context.
 
 On macOS every localbench session, rollouts and improvers alike, runs under `sandbox-exec`,
-which denies reads under `localbench/tasks/` and under the checkout's `.git` (which holds every
-checker as a blob) for the whole process tree, by whatever route a call takes. Elsewhere set
-`HARNESS2_GRADER_BOUNDARY=off` and run where `localbench/tasks/` is not mounted. Without that
-boundary the only guard is a floor hook that refuses tool calls naming the tasks, and it matches
-strings.
+enforced by the kernel for the whole process tree. A session cannot read, write or rename
+anything under `localbench/tasks/`, the checkout's `.git` (which holds every checker as a blob)
+or Claude Code's session transcripts, cannot read or write the run state under `runs/` (scores,
+other rollouts' outputs) outside its own directory, and cannot reach a tmux server or send
+Apple Events, through which it could ask a process outside the sandbox to read for it. Links
+are dropped from a workspace before it is scored. Copies of a checker made elsewhere on the
+machine are outside the boundary, so run untrusted executors as a separate user or in a
+container. A sudoers rule for `HARNESS2_HERMES_RUNNER` must also allow `/usr/bin/sandbox-exec`,
+which the runner now starts. Elsewhere set `HARNESS2_GRADER_BOUNDARY=off` and run where
+`localbench/tasks/` is not mounted; the only guard left is then a floor hook that refuses tool
+calls naming the tasks, and it matches strings.
 
 ## Hermes executor
 

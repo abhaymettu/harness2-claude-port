@@ -155,7 +155,7 @@ def _main(args: argparse.Namespace) -> int:
         audit_dir=runs_root / "_audit" / summary_ns,
         floor_hooks=getattr(adapter, "floor_hooks", None),
         floor_env=getattr(adapter, "floor_env", None),
-        floor_runner=tuple(getattr(adapter, "floor_runner", ())),
+        floor_runner=getattr(adapter, "runner_for", None),
     )
 
     only = _csv(args.only_domains)
