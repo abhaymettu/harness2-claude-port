@@ -225,7 +225,7 @@ Cite the Harness² paper:
 Apache 2.0, the same license as upstream; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Code
 under [`third_party/`](third_party/README.md), benchmarks and datasets keep their own licenses;
 see the [third-party notices](dependencies/README.md). The Harness² logo, wordmark, figures and
-video are not included. This README replaces the upstream one, which is in the
-[upstream repository](https://github.com/google-research/harness2).
+video are not included. Modified by The harness2-ports Authors: this README replaces the
+upstream one, which is in the [upstream repository](https://github.com/google-research/harness2).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

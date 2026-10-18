@@ -15,3 +15,5 @@ python -m pytest -q tests
 
 The repository's commit hooks refuse home-directory paths, secrets and attribution trailers. Turn
 them on with `git config core.hooksPath .githooks`.
+
+Modified by The harness2-ports Authors: this file replaces the upstream contribution guide.
