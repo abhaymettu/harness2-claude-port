@@ -86,8 +86,8 @@ Every session, rollouts and improvers alike, also gets a floor through `--settin
 harness edit reaches. It excludes your user-level `CLAUDE.md` and every `CLAUDE.md` in a parent
 directory, turns auto-memory off, keeps hooks on, denies tools whose effects outlive the session
 (schedules, remote triggers, notifications), and adds the operator's hooks. Sessions run with
-`--setting-sources project --strict-mcp-config --no-session-persistence`, and with permissions
-bypassed inside the workspace. A session runs as you and can read what you can, so run
+`--setting-sources project --strict-mcp-config --no-session-persistence`, and with permission
+prompts skipped (`--dangerously-skip-permissions`). A session runs as you and can read what you can, so run
 untrusted tasks in a container or as a separate user.
 
 ## localbench

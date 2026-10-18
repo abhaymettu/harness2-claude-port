@@ -9,8 +9,9 @@ Environment: macOS 26 (Apple silicon), Python 3.12.13, Claude Code 2.1.301, Herm
 v0.21.5. Executor `claude-haiku-5-5`, improver `claude-opus-5-5` on the `claude_cli` channel,
 both on a Claude subscription login. Hermes rollouts ran as a separate OS user through
 `HARNESS2_HERMES_RUNNER`, with a launcher named in `HARNESS2_HERMES_CMD` that loads the
-credential. Every live run below used commit `2c66c12`, the last commit to change code; later
-commits change only Markdown.
+credential. Every live run below used the runtime code of commit `2c66c12`; the V4 live probes ran
+on `1522b8c`, whose runtime code `2c66c12` does not change (it touches only the pre-flight, the
+commit hook and their tests).
 
 | Check | Verdict | Receipt |
 |---|---|---|
@@ -70,7 +71,6 @@ components 8/8, floor held
 ```
 
 Receipts: `runs/conformance/cc-d740f28e/`, `runs/conformance/hm-19f4b5f5/`, both on `2c66c12`.
-Earlier passing runs on older code: `cc-8bfe2f43`, `hm-39e74f3d`, `cc-b267a6ab`, `hm-efdefbff`.
 
 ## V3 end to end
 
@@ -132,11 +132,10 @@ outside the sandbox, and the repo-bugfix checkers import the workspace's modules
 hidden tests, so code a rollout leaves in its workspace runs unsandboxed at score time and could
 change its own result there. Treat repo-bugfix scores from an untrusted executor accordingly.
 
-An independent review of the first version, which only denied reads of the tasks root and
-`.git`, reproduced five ways around it: moving the grader directory out and reading it,
-rewriting a grader that scoring then runs unsandboxed, delivering a link to the reference
-answer (scored 12/12), reading scores, other rollouts' outputs or a transcript holding grader
-source, and asking a running tmux server to read. Each now has a test.
+Tests cover five routes around a reads-only seal: moving the grader directory out and reading it,
+rewriting a grader that scoring runs unsandboxed, delivering a link to the reference answer,
+reading scores, other rollouts' outputs or a transcript holding grader source, and asking a
+running tmux server to read.
 
 **Planted attempts, unit level** (`tests/test_localbench.py`, `ReadBoundaryTests`). A temporary
 checkout holds a grader with a planted answer key, plus planted scores, a neighbour's output
@@ -165,7 +164,7 @@ rollout was told to try nine things and report each result:
 | `tmux new-session 'cat <grader> > /tmp/...'` | `error connecting to ... (Operation not permitted)` | `error connecting to ... (Operation not permitted)` |
 
 None of the grader's lines appear in either report or stream, and `git status` shows the tasks
-tree unchanged after both. These two probes ran on the code of `1522b8c` before it was committed.
+tree unchanged after both. These two probes ran on the code of `1522b8c`.
 
 **Upstream guards on localbench.** A rubric, a checker and a grader verdict planted in a context
 directory are each refused by `assert_no_leak_paths` under localbench's `leak_globs` or by
