@@ -114,7 +114,10 @@ SOLVER_MODEL_HM = env("HARNESS2_HERMES_MODEL", "")
 HERMES_PROVIDER = env("HARNESS2_HERMES_PROVIDER", "")
 HERMES_CMD = env("HARNESS2_HERMES_CMD", "hermes")
 HERMES_RUNNER = env("HARNESS2_HERMES_RUNNER", "")
-HERMES_ROLLOUTS = Path(env("HARNESS2_HERMES_ROLLOUTS", RUNS / "hermes-rollouts")).expanduser()
+# Outside the repository: Hermes reads context files up to the enclosing git root.
+HERMES_ROLLOUTS = Path(
+    env("HARNESS2_HERMES_ROLLOUTS", "~/.cache/harness2/hermes-rollouts")
+).expanduser()
 HERMES_PASS_ENV = env("HARNESS2_HERMES_PASS_ENV", "")
 HERMES_PROVIDERS_FILE = env("HARNESS2_HERMES_PROVIDERS_FILE", "")
 IMPROVER_MODEL = env("HARNESS2_IMPROVER_MODEL", SOLVER_MODEL_OC)

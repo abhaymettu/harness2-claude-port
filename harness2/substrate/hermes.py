@@ -397,12 +397,23 @@ class HermesSubstrate:
 
 
 def check_root(root: Path) -> None:
-    """A rollout root must never sit inside a Hermes home: a run there could read or write it."""
-    if ".hermes" in Path(root).absolute().parts:
+    """A rollout root must sit neither inside a Hermes home (a run there could read or write it)
+    nor inside a git checkout (Hermes loads .hermes.md and AGENTS.md from the working directory
+    up to the git root, so the checkout's files would reach every rollout's system prompt)."""
+    resolved = Path(root).expanduser().resolve()
+    if ".hermes" in resolved.parts:
         raise RuntimeError(
             f"rollout root {root} is inside a .hermes directory; use a separate root "
             "(HARNESS2_HERMES_ROLLOUTS) so no rollout can touch a live home"
         )
+    for d in (resolved, *resolved.parents):
+        with contextlib.suppress(OSError):
+            if (d / ".git").exists():
+                raise RuntimeError(
+                    f"rollout root {root} is inside the git checkout {d}; Hermes would load its "
+                    ".hermes.md or AGENTS.md into every rollout. Set HARNESS2_HERMES_ROLLOUTS to a "
+                    "directory outside any repository"
+                )
 
 
 # The rollout process: reads its environment as one JSON line on stdin, records its pid (its
@@ -488,20 +499,32 @@ def get_tree(launch: Launch, src: Path, dst: Path) -> None:
 
 
 _INSPECT = r"""
-import hashlib, json, os, sqlite3, sys
+import hashlib, json, os, sqlite3, stat, sys
 home, work = sys.argv[1], sys.argv[2]
 out = {"hashes": {}, "sessions": [], "usage": [], "system_prompt": "", "skills_dir": [],
        "children": []}
+def digest(p):
+    try:
+        st = os.lstat(p)
+        if stat.S_ISLNK(st.st_mode):
+            return "link:" + os.readlink(p)
+        if not stat.S_ISREG(st.st_mode):
+            return "special:%o" % st.st_mode
+        with open(p, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError as e:
+        return "unreadable:%s" % e.errno
 for base in (os.path.join(home, "skills"), os.path.join(home, "memories"),
              os.path.join(work, "skills"), os.path.join(home, "SOUL.md")):
-    paths = [base] if os.path.isfile(base) else [
-        os.path.join(d, f) for d, _, fs in os.walk(base) for f in fs]
+    if not os.path.lexists(base):
+        continue
+    real_dir = os.path.isdir(base) and not os.path.islink(base)
+    paths = [os.path.join(d, f) for d, _, fs in os.walk(base) for f in fs] if real_dir else [base]
     for p in paths:
         name = os.path.basename(p)
         if name.startswith(".") or name.endswith(".lock"):
             continue
-        with open(p, "rb") as fh:
-            out["hashes"][os.path.relpath(p, os.path.dirname(home))] = hashlib.sha256(fh.read()).hexdigest()
+        out["hashes"][os.path.relpath(p, os.path.dirname(home))] = digest(p)
 sk = os.path.join(home, "skills")
 out["skills_dir"] = sorted(n for n in os.listdir(sk) if not n.startswith(".")) if os.path.isdir(sk) else []
 db = os.path.join(home, "state.db")
@@ -534,13 +557,16 @@ print(json.dumps(out))
 def inspect_rollout(launch: Launch, rollout: Path) -> dict:
     """Harness file hashes, the home's skills/ listing and the state.db accounting, read as the
     runner user (a WAL-mode database needs a writable directory even to read)."""
-    p = _as_runner(
-        launch,
-        [launch.python, "-I", "-c", _INSPECT, str(rollout / "home"), str(rollout / "work")],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        p = _as_runner(
+            launch,
+            [launch.python, "-I", "-c", _INSPECT, str(rollout / "home"), str(rollout / "work")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": "inspect timed out after 120 s"}
     try:
         return json.loads(p.stdout)
     except ValueError:
@@ -556,13 +582,25 @@ def read_root_file(launch: Launch, path: Path) -> str:
 def usage_summary(state: Mapping) -> dict:
     """Totals over every model call in the home: the rollout, its subagents, any auxiliary call."""
     usage = state.get("usage") or []
-    est = sum(float(u.get("estimated_cost_usd") or 0) for u in usage)
-    act = sum(float(u.get("actual_cost_usd") or 0) for u in usage)
+    act = [float(u.get("actual_cost_usd") or 0) for u in usage]
+    est = [float(u.get("estimated_cost_usd") or 0) for u in usage]
+    cost = sum(a or e for a, e in zip(act, est))
+    source = (
+        "unknown"
+        if not cost
+        else "actual"
+        if all(act)
+        else "estimated"
+        if not any(act)
+        else "mixed"
+    )
     return {
-        "cost_usd": (act or est) or None,
-        "cost_source": "actual" if act else ("estimated" if est else "unknown"),
+        "cost_usd": cost or None,
+        "cost_source": source,
         "input_tokens": sum(int(u.get("input_tokens") or 0) for u in usage),
         "output_tokens": sum(int(u.get("output_tokens") or 0) for u in usage),
+        "cache_read_tokens": sum(int(u.get("cache_read_tokens") or 0) for u in usage),
+        "cache_write_tokens": sum(int(u.get("cache_write_tokens") or 0) for u in usage),
         "api_calls": sum(int(u.get("api_call_count") or 0) for u in usage),
         "auxiliary_tasks": sorted({u["task"] for u in usage if u.get("task")}),
         "sessions": len(state.get("sessions") or []),
@@ -693,7 +731,11 @@ def run_rollout(
         pid = _as_runner(launch, ["cat", str(pidfile)], capture_output=True, text=True).stdout
         if pid.strip().isdigit():
             _as_runner(launch, ["kill", "-KILL", "--", f"-{pid.strip()}"], capture_output=True)
-        get_tree(launch, work, run_dir / "workspace")
+        try:
+            get_tree(launch, work, run_dir / "workspace")
+            harvest_error = ""
+        except (OSError, tarfile.TarError) as exc:
+            harvest_error = f"{type(exc).__name__}: {exc}"[:500]
         state = inspect_rollout(launch, rollout)
         if state.get("system_prompt"):
             (run_dir / "system_prompt.md").write_text(state["system_prompt"], encoding="utf-8")
@@ -714,6 +756,8 @@ def run_rollout(
         }
         if state.get("error"):
             record["inspect_error"] = state["error"]
+        if harvest_error:
+            record["harvest_error"] = harvest_error
         (run_dir / "rollout.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return record
 

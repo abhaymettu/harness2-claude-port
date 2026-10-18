@@ -150,7 +150,7 @@ environment:
 | `HARNESS2_HERMES_MODEL` | Executor model, for example `claude-haiku-5-5` |
 | `HARNESS2_HERMES_PROVIDER` | Hermes provider name, for example `anthropic` |
 | `HARNESS2_HERMES_CMD` | The command that starts Hermes (default `hermes`) |
-| `HARNESS2_HERMES_ROLLOUTS` | Where rollout homes are created (default `runs/hermes-rollouts`); refused if inside a `.hermes` directory |
+| `HARNESS2_HERMES_ROLLOUTS` | Where rollout homes are created (default `~/.cache/harness2/hermes-rollouts`); refused inside a `.hermes` directory or a git checkout, whose `AGENTS.md` and `.hermes.md` Hermes would load |
 | `HARNESS2_HERMES_RUNNER` | Optional prefix that runs Hermes as another user, for example `sudo -n -u rollouts` |
 | `HARNESS2_HERMES_PASS_ENV` | Names of variables passed to the rollout, such as `ANTHROPIC_API_KEY`; nothing else from your environment is |
 | `HARNESS2_HERMES_PROVIDERS_FILE` | Optional JSON file with a `providers:` map, for a custom endpoint |
@@ -192,10 +192,14 @@ Two gaps against the eight components:
 
 The floor also denies any command that would need an approval, turns off background review,
 title generation, memory and skill nudges, the curator and bundled skills, and puts the
-operator's hooks before the harness's. On a subscription login Hermes reports no price, so `rollout.json` records
-`cost_usd: null` and `cost_source: unknown` with token counts. Hermes passes some credential variables on to the
-agent's terminal and redacts token-shaped output; use a key you can revoke, and a separate OS
-user (`HARNESS2_HERMES_RUNNER`) if rollouts must not read your files.
+operator's hooks before the harness's. That order is not enforcement: Hermes applies a hook's
+argument rewrite after every hook has seen the original call, and a hook command is shell.
+
+On a subscription login Hermes reports no price, so `rollout.json` records `cost_usd: null`
+and `cost_source: unknown` with token counts. Hermes passes some credential variables on to
+the agent's terminal and every passed variable on to hook commands; it redacts token-shaped
+tool output. Use a key you can revoke, and a separate OS user (`HARNESS2_HERMES_RUNNER`) if
+rollouts must not read your files.
 
 ## Experiments
 

@@ -246,6 +246,36 @@ class FloorTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "inside a .hermes directory"):
             HM.check_root(Path("/srv/u/.hermes/rollouts"))
 
+    def test_rollout_root_inside_a_git_checkout_is_refused(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "repo" / ".git").mkdir(parents=True)
+        (tmp / "outside").mkdir()
+        (tmp / "link").symlink_to(tmp / "repo")
+        HM.check_root(tmp / "outside" / "rollouts")
+        for root in (tmp / "repo" / "runs" / "rollouts", tmp / "link" / "rollouts"):
+            with self.assertRaisesRegex(RuntimeError, "inside the git checkout"):
+                HM.check_root(root)
+
+    def test_cost_counts_each_call_once_and_names_its_source(self):
+        def usage(*rows):
+            return HM.usage_summary(
+                {"usage": [{"actual_cost_usd": a, "estimated_cost_usd": e} for a, e in rows]}
+            )
+
+        self.assertEqual(
+            [
+                (u["cost_usd"], u["cost_source"])
+                for u in (
+                    usage((0.5, 0.4), (0.0, 0.25)),
+                    usage((0.5, 0.4)),
+                    usage((None, 0.25)),
+                    usage((None, None)),
+                )
+            ],
+            [(0.75, "mixed"), (0.5, "actual"), (0.25, "estimated"), (None, "unknown")],
+        )
+
     def test_launch_reads_its_settings_from_config(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
             json.dump({"local": {"base_url": "http://127.0.0.1:1/v1"}}, f)
@@ -281,6 +311,10 @@ FAKE_HERMES = textwrap.dedent(
     if os.environ.get("FAKE_MUTATE"):
         with open("skills/probe-skill/SKILL.md", "a") as f:
             f.write("tampered\\n")
+    if os.environ.get("FAKE_LINKS"):
+        os.symlink("/dev/zero", "skills/probe-skill/zero")
+        os.symlink("missing-target", "skills/probe-skill/dangling")
+        os.mkfifo("skills/probe-skill/pipe")
     db = sqlite3.connect(os.path.join(home, "state.db"))
     db.executescript(
         "CREATE TABLE sessions (id TEXT, parent_session_id TEXT, model TEXT, started_at REAL,"
@@ -431,6 +465,19 @@ class ExecutorTests(unittest.TestCase):
     def test_a_run_that_edits_its_own_harness_is_flagged(self):
         record, _, _ = self.run_once(FAKE_MUTATE="1")
         self.assertEqual(record["harness_mutated"], ["work/skills/probe-skill/SKILL.md"])
+
+    def test_links_and_special_files_are_flagged_without_reading_them(self):
+        record, _, _ = self.run_once(FAKE_LINKS="1")
+        self.assertEqual(
+            record["harness_mutated"],
+            [
+                "work/skills/probe-skill/dangling",
+                "work/skills/probe-skill/pipe",
+                "work/skills/probe-skill/zero",
+            ],
+        )
+        self.assertEqual((record["input_tokens"], record["sessions"]), (110, 2))
+        self.assertNotIn("inspect_error", record)
 
     def test_preflight_runs_the_command_without_a_model(self):
         HM.HermesSubstrate().preflight(self.launch)
