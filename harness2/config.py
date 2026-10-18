@@ -106,6 +106,17 @@ CLAUDE_VIA_VERTEX = env("HARNESS2_CLAUDE_VIA_VERTEX", "1" if VERTEX_PROJECT else
 SOLVER_MODEL_OC = env("HARNESS2_SOLVER_MODEL", "")
 SOLVER_MODEL_CX = env("HARNESS2_CODEX_MODEL", SOLVER_MODEL_OC.split("/", 1)[-1])
 SOLVER_MODEL_CC = env("HARNESS2_CLAUDE_MODEL", "")
+# Hermes rollouts: model and provider as `hermes chat -m/--provider` take them. The command,
+# an optional runner prefix (another OS user, say) and the rollout root say where a rollout runs;
+# PASS_ENV names credentials copied from this environment into the otherwise empty rollout env,
+# and PROVIDERS_FILE is a JSON `providers:` map for custom endpoints. See README, Hermes.
+SOLVER_MODEL_HM = env("HARNESS2_HERMES_MODEL", "")
+HERMES_PROVIDER = env("HARNESS2_HERMES_PROVIDER", "")
+HERMES_CMD = env("HARNESS2_HERMES_CMD", "hermes")
+HERMES_RUNNER = env("HARNESS2_HERMES_RUNNER", "")
+HERMES_ROLLOUTS = Path(env("HARNESS2_HERMES_ROLLOUTS", RUNS / "hermes-rollouts")).expanduser()
+HERMES_PASS_ENV = env("HARNESS2_HERMES_PASS_ENV", "")
+HERMES_PROVIDERS_FILE = env("HARNESS2_HERMES_PROVIDERS_FILE", "")
 IMPROVER_MODEL = env("HARNESS2_IMPROVER_MODEL", SOLVER_MODEL_OC)
 JUDGE_MODEL = env("HARNESS2_JUDGE_MODEL", "")
 

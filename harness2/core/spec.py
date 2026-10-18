@@ -134,6 +134,7 @@ INSTALL_MODES = (
     "workspace_config",
     "codex_root",
     "claude_workspace",
+    "hermes_home",
 )
 
 

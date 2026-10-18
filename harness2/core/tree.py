@@ -56,6 +56,9 @@ class SurfaceSpec:
     plugin_dir: str | None
     hooks_file: str | None
     hook_events: frozenset[str] = frozenset()
+    # "nested": {"Event": [{"matcher", "hooks": [{"type": "command", "command"}]}]} (Claude Code,
+    # Codex). "flat": {"event": [{"matcher", "command", "timeout"}]} (Hermes shell hooks).
+    hook_entry_shape: str = "nested"
     compile_skill_scripts: bool = False
     reject_empty_always_on: bool = False
 
@@ -233,19 +236,22 @@ def check_hooks(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
         return
     hooks = doc.get("hooks") if isinstance(doc, dict) else None
     if not isinstance(hooks, dict) or not hooks:
-        errs.append(f'{hf} needs a top-level {{"hooks": {{"<Event>": [...]}}}} object')
+        errs.append(f'{hf} needs a top-level {{"hooks": {{"<event>": [...]}}}} object')
         return
     for event, entries in hooks.items():
         if event not in surface.hook_events:
             errs.append(
                 f"{hf}: unknown event {event!r}; the framework dispatches "
-                f"{', '.join(sorted(surface.hook_events))} (PascalCase)"
+                f"{', '.join(sorted(surface.hook_events))}"
             )
             continue
         if not isinstance(entries, list):
             errs.append(f"{hf}: {event} must map to a LIST of matcher entries")
             continue
         for i, entry in enumerate(entries):
+            if surface.hook_entry_shape == "flat":
+                _check_flat_hook(hf, f"{event}[{i}]", entry, errs)
+                continue
             if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
                 errs.append(f"{hf}: {event}[{i}] needs a `hooks` list")
                 continue
@@ -257,6 +263,25 @@ def check_hooks(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
                     )
                 elif not str(h.get("command", "")).strip():
                     errs.append(f"{hf}: {event}[{i}] has an empty `command`")
+
+
+_FLAT_HOOK_KEYS = {"matcher": str, "command": str, "timeout": int, "fail_closed": bool}
+
+
+def _check_flat_hook(hf: str, where: str, entry, errs: list[str]) -> None:
+    """One `{"matcher", "command", "timeout", "fail_closed"}` entry; unknown keys are refused
+    because the framework ignores them silently."""
+    if not isinstance(entry, dict):
+        errs.append(f"{hf}: {where} must be an object with a `command`")
+        return
+    extra = sorted(set(entry) - set(_FLAT_HOOK_KEYS))
+    if extra:
+        errs.append(f"{hf}: {where} may use only {sorted(_FLAT_HOOK_KEYS)}; remove {extra}")
+    for key, kind in _FLAT_HOOK_KEYS.items():
+        if key in entry and type(entry[key]) is not kind:
+            errs.append(f"{hf}: {where} `{key}` must be a {kind.__name__}")
+    if not str(entry.get("command", "")).strip():
+        errs.append(f"{hf}: {where} has an empty `command`")
 
 
 def check_hooks_keys(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
