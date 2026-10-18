@@ -168,8 +168,7 @@ def drop_links(root: Path) -> list[str]:
 class LocalBenchAdapter:
     """`--bench local`: the localbench tasks, run under Claude Code (cc) or Hermes (hm)."""
 
-    def __init__(self, substrate: str = "", tasks_root: Path = TASKS_ROOT):
-        substrate = substrate or ("cc" if CC is not None else "hm")
+    def __init__(self, substrate: str = "cc", tasks_root: Path = TASKS_ROOT):
         if substrate not in ("cc", "hm"):
             raise ValueError(f"localbench runs on --substrate cc or hm, got {substrate!r}")
         given = Path(tasks_root).absolute()
