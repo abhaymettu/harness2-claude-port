@@ -20,5 +20,19 @@ Apache-2.0 section 4(b) asks that changed files say so. Each file below carries 
 |---|---|---|
 | `harness2/config.py` | `CLAUDE_VIA_VERTEX` (Vertex only when a Google Cloud project is set, or `HARNESS2_CLAUDE_VIA_VERTEX=1`); `SOLVER_MODEL_CC` from `HARNESS2_CLAUDE_MODEL`; default improver channel is `claude_cli` for a bare model id, overridable with `HARNESS2_IMPROVER_CHANNEL` | Run without Google Cloud on a Claude Code login |
 | `harness2/core/proposer.py` | `Proposer.env()` leaves the caller's environment alone for `claude_cli` when Vertex is off | Upstream always forced Vertex and stripped `ANTHROPIC_API_KEY`, which breaks API-key and subscription logins |
+| `harness2/core/proposer.py` | `_claude_cli()` runs the improver under the same isolation floor as rollouts (`--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--settings` with `claudeMdExcludes` and auto-memory off) | Upstream ran editor, composer and reflector sessions with the caller's whole user configuration, so a user-level CLAUDE.md reached them and could be copied into adopted harnesses |
+| `harness2/core/prompts.py` | A `claude_code` surface text (paths, Skill and Agent tools, the hooks file) beside the OpenCode and Codex ones; the method text of the stage prompts is unchanged | `_st()` refuses a surface it has no text for, and the existing texts name OpenCode and Codex paths |
+| `harness2/core/tree.py` | Optional per-surface allowlists: top-level keys of the hooks file, and frontmatter keys of skills and sub-agents | A Claude Code settings file or agent frontmatter can carry permissions, environment, MCP servers or hooks; those belong to the operator's floor, not to an editable harness |
+| `harness2/core/spec.py` | `INSTALL_MODES` gains `claude_workspace` | The Claude Code substrate's install mode |
+| `harness2/cli/_common.py` | `--substrate cc` | Select the Claude Code substrate |
+| `harness2/cli/check.py` | `--conformance` runs the live Claude Code component probe; `--bench` optional with it | Prove every component and the floor reach a rollout |
 
-New files added by this project are listed in `README.md`, not here.
+## New files
+
+| File | What it is |
+|---|---|
+| `harness2/substrate/claude_code.py` | `ClaudeCodeSubstrate`: surface, install, `claude -p` launcher, stream-json renderer, preflight |
+| `harness2/claude_floor.py` | The frozen floor shared by rollouts and improver sessions |
+| `harness2/conformance.py` | The live component and floor probe behind `harness2-check --conformance` |
+| `tests/test_claude_code_substrate.py`, `tests/test_provider_neutral.py` | Unit tests; `tests/fixtures/claude_code/` holds one recorded conformance stream |
+| `.githooks/` | Commit hooks that keep the history publishable |

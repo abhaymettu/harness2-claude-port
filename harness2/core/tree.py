@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """The c1..c8 component tree: read, validate, write, diff — parametrised by SurfaceSpec.
 
@@ -58,6 +60,12 @@ class SurfaceSpec:
     reject_empty_always_on: bool = False
 
     stubs: tuple[tuple[str, str], ...] = ()
+    # None means unrestricted. A set names the only keys allowed: top-level keys of the hooks
+    # file, and frontmatter keys of skills and sub-agents. Anything else could reach settings
+    # the operator owns (permissions, env, MCP servers, hooks smuggled into frontmatter).
+    hooks_file_keys: frozenset[str] | None = None
+    skill_frontmatter_keys: frozenset[str] | None = None
+    subagent_frontmatter_keys: frozenset[str] | None = None
 
 
 @lru_cache(maxsize=8)
@@ -251,6 +259,34 @@ def check_hooks(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
                     errs.append(f"{hf}: {event}[{i}] has an empty `command`")
 
 
+def check_hooks_keys(surface: SurfaceSpec, src: str, errs: list[str]) -> None:
+    try:
+        doc = json.loads(src)
+    except json.JSONDecodeError:
+        return
+    if isinstance(doc, dict) and surface.hooks_file_keys is not None:
+        extra = sorted(set(doc) - surface.hooks_file_keys)
+        if extra:
+            errs.append(
+                f"{surface.hooks_file} may hold only {sorted(surface.hooks_file_keys)}; remove "
+                f"{extra} -- those settings belong to the operator, not the harness"
+            )
+
+
+def frontmatter_keys(src: str) -> list[str]:
+    """Top-level keys of a leading `---` YAML block, or [] when there is none."""
+    m = re.match(r"---\n(.*?)\n---", src, re.S)
+    return re.findall(r"^([A-Za-z_][\w-]*)\s*:", m.group(1), re.M) if m else []
+
+
+def _check_frontmatter(rel: str, src: str, allowed: frozenset[str] | None, errs: list[str]) -> None:
+    if allowed is None:
+        return
+    extra = sorted(set(frontmatter_keys(src)) - allowed)
+    if extra:
+        errs.append(f"{rel} frontmatter may use only {sorted(allowed)}; remove {extra}")
+
+
 def _py_compiles(rel: str, src: str, errs: list[str]) -> None:
 
     try:
@@ -371,6 +407,13 @@ def validate(
 
     if surface.hooks_file is not None and surface.hooks_file in tree:
         check_hooks(surface, tree[surface.hooks_file], errs)
+        check_hooks_keys(surface, tree[surface.hooks_file], errs)
+    for name in skills:
+        rel = f"{surface.skill_dir}/{name}/SKILL.md"
+        _check_frontmatter(rel, tree[rel], surface.skill_frontmatter_keys, errs)
+    for name in subs:
+        rel = f"sub_agents/{name}/AGENT.md"
+        _check_frontmatter(rel, tree[rel], surface.subagent_frontmatter_keys, errs)
 
     _check_script_refs(surface, tree, r, reserved_scripts, errs)
 

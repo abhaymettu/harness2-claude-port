@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """The benchmark seam: everything a benchmark must supply, and nothing more.
 
@@ -126,7 +128,13 @@ class BenchPrompts:
                     )
 
 
-INSTALL_MODES = ("workspace_agents_md", "home_dir_jinja", "workspace_config", "codex_root")
+INSTALL_MODES = (
+    "workspace_agents_md",
+    "home_dir_jinja",
+    "workspace_config",
+    "codex_root",
+    "claude_workspace",
+)
 
 
 @dataclass(frozen=True)

@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import config
+from .. import claude_floor, config
 from .spec import ChannelSpec
 
 SYSTEM_ARG_MAX = 120_000
@@ -223,6 +223,9 @@ class Proposer:
             "json",
             "--effort",
             self.spec.effort,
+            *claude_floor.ISOLATION_FLAGS,
+            "--settings",
+            json.dumps(claude_floor.floor_settings(cwd)),
         ]
         stdin = mission
         if system:
