@@ -13,8 +13,9 @@ repository.
 
 ## Modified upstream files
 
-Apache-2.0 section 4(b) asks that changed files say so. Each file below carries the line
-`Modified by The harness2-ports Authors` under its license header, and the table says why.
+Apache-2.0 section 4(b) asks that changed files say so. Each Python file below carries the line
+`Modified by The harness2-ports Authors` under its license header, `README.md` says so in the
+section it adds, and the table says why.
 
 | File | Change | Why |
 |---|---|---|
@@ -29,6 +30,12 @@ Apache-2.0 section 4(b) asks that changed files say so. Each file below carries 
 | `harness2/preflight.py` | A self-contained benchmark (`local`) checks only its substrate and its own preflight | localbench has nothing to install and no judge model |
 | `harness2/cli/judge.py` | Skips the judge-model check for `--bench local` | localbench scores with deterministic checkers |
 | `harness2/cli/check.py` | `--conformance` runs the live Claude Code component probe; `--bench` optional with it | Prove every component and the floor reach a rollout |
+| `harness2/config.py` | `SOLVER_MODEL_HM` and the `HARNESS2_HERMES_*` settings (command, runner, rollout root, passed variables, providers file, provider) | Configure the Hermes substrate |
+| `harness2/core/prompts.py` | A `hermes` surface text (SOUL.md sections, `hooks.json` shell hooks, `agent-<name>` brief skills) | The improver needs Hermes paths and tool names |
+| `harness2/core/tree.py` | `SurfaceSpec.hook_entry_shape`: `nested` (default, unchanged) or `flat`, which checks Hermes hook entries (`matcher`, `command`, `timeout`, `fail_closed`, each typed) | Hermes hook entries are flat; the nested check would refuse every valid one |
+| `harness2/core/spec.py` | `INSTALL_MODES` gains `hermes_home` | The Hermes substrate's install mode |
+| `harness2/cli/_common.py`, `harness2/cli/run_sweep.py`, `harness2/cli/check.py` | `--substrate hm`; the run identity records the `hm` executor model; `--conformance` runs the Hermes probe, with `--provider` | Select and check the Hermes substrate |
+| `README.md` | A "Hermes executor" section | Quickstart and the two component gaps |
 
 ## New files
 
@@ -40,3 +47,6 @@ Apache-2.0 section 4(b) asks that changed files say so. Each file below carries 
 | `tests/test_claude_code_substrate.py`, `tests/test_provider_neutral.py` | Unit tests; `tests/fixtures/claude_code/` holds one recorded conformance stream |
 | `harness2/benchmarks/localbench.py`, `localbench/tasks/` | `--bench local`: 12 tasks in 3 domains with deterministic checkers kept out of every workspace and model context; `tests/test_localbench.py` |
 | `.githooks/` | Commit hooks that keep the history publishable |
+| `harness2/substrate/hermes.py` | `HermesSubstrate`: surface, throwaway-home install, launcher (secrets on stdin), harvest, `state.db` read-back, stream-json renderer, preflight |
+| `harness2/conformance_hermes.py` | The live component and floor probe behind `harness2-check --substrate hm --conformance` |
+| `tests/test_hermes_substrate.py`, `tests/scripted_model.py` | Unit tests, and a scripted OpenAI-compatible endpoint for running Hermes with no model; `tests/fixtures/hermes/` holds one recorded conformance rollout |
