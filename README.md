@@ -277,10 +277,10 @@ checkers on the selected output and on the base output. Executor `claude-haiku-5
 
 | Executor | Seed | Tasks ok | Base mean (SD) | Adopted mean (SD) | Fallbacks | Library entries | Rollout cost | Improver cost |
 |---|---|---|---|---|---|---|---|---|
-| Claude Code | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 6 | $0.16 | $8.84 |
-| Claude Code | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 9 | $0.18 | $12.36 |
-| Hermes | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 9 | unknown | $9.57 |
-| Hermes | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 10 | unknown | $11.39 |
+| Claude Code | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 8 | $0.16 | $9.30 |
+| Claude Code | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 8 | $0.17 | $9.20 |
+| Hermes | 1 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 10 | unknown | $10.47 |
+| Hermes | 2 | 12/12 | 100.0 (0.0) | 100.0 (0.0) | 0 | 9 | unknown | $9.76 |
 
 The executor already passes every check at base, so this run shows the whole pipeline working
 on both executors and measures no gain from adaptation. Hermes reports no price on a
