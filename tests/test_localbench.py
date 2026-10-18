@@ -89,6 +89,20 @@ class ShippedTasksTests(unittest.TestCase):
             for word in ("grader", "rubric", "hidden test", "score"):
                 self.assertNotIn(word, text, task_id)
 
+    def test_upstream_guards_refuse_a_planted_rubric_in_a_context_dir(self):
+        for planted, body in (
+            ("grader/rubric.md", "criteria"),
+            (".claude/skills/x/grader/grade.py", "print(1)"),
+            ("notes/result.json", '{"passed_count": 12}'),
+        ):
+            with self.subTest(planted=planted):
+                ctx = scratch(self) / "context"
+                (ctx / planted).parent.mkdir(parents=True)
+                (ctx / planted).write_text(body)
+                with self.assertRaises(ValueError):
+                    context.assert_no_leak_paths(ctx, self.adapter.spec.leak_globs)
+                    context.assert_no_grader_verdicts(ctx)
+
     def test_source_copied_into_model_context_excludes_graders(self):
         with tempfile.TemporaryDirectory() as tmp:
             for task_id in self.adapter.tasks():
