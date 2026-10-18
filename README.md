@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/pdf/2610.14224"><img src="https://img.shields.io/badge/Paper-arXiv-EA4335?logo=arxiv&logoColor=white" alt="Paper"></a>
-  <a href="docs/QUICKSTART.md"><img src="https://img.shields.io/badge/Docs-Quick%20start-FBBC04" alt="Quick start"></a>
+  <a href="docs/BENCHMARKS.md"><img src="https://img.shields.io/badge/Docs-Benchmark%20guides-FBBC04" alt="Benchmark guides"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-34A853" alt="License"></a>
 </p>
 
