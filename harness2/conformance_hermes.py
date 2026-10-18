@@ -348,6 +348,6 @@ def format_report(report: dict) -> str:
     for label, r in report["rollouts"].items():
         lines.append(
             f"  rollout {label}: exit={r.get('exit_code')} tools={r.get('num_tool_calls')} "
-            f"cost_usd={r.get('cost_usd')} ({r.get('cost_source')}) wall_s={r.get('wall_s')}"
+            f"cost={r.get('cost_usd') or 'unknown'} ({r.get('cost_source')}) wall_s={r.get('wall_s')}"
         )
     return "\n".join(lines)

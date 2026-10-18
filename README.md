@@ -193,7 +193,7 @@ Two gaps against the eight components:
 The floor also denies any command that would need an approval, turns off background review,
 title generation, memory and skill nudges, the curator and bundled skills, and puts the
 operator's hooks before the harness's. On a subscription login Hermes reports no price, so `rollout.json` records
-`cost_source: unknown` with token counts. Hermes passes some credential variables on to the
+`cost_usd: null` and `cost_source: unknown` with token counts. Hermes passes some credential variables on to the
 agent's terminal and redacts token-shaped output; use a key you can revoke, and a separate OS
 user (`HARNESS2_HERMES_RUNNER`) if rollouts must not read your files.
 

@@ -559,7 +559,7 @@ def usage_summary(state: Mapping) -> dict:
     est = sum(float(u.get("estimated_cost_usd") or 0) for u in usage)
     act = sum(float(u.get("actual_cost_usd") or 0) for u in usage)
     return {
-        "cost_usd": act or est,
+        "cost_usd": (act or est) or None,
         "cost_source": "actual" if act else ("estimated" if est else "unknown"),
         "input_tokens": sum(int(u.get("input_tokens") or 0) for u in usage),
         "output_tokens": sum(int(u.get("output_tokens") or 0) for u in usage),

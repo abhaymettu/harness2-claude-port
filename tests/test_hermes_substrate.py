@@ -463,6 +463,13 @@ class RecordedRunTests(unittest.TestCase):
             lines[-1], "[HARNESS] result: exit=0 | tokens in=8 out=1211 | duration_ms=10279"
         )
 
+    def test_an_unpriced_subscription_run_has_no_cost(self):
+        usage = HM.usage_summary(self.state)
+        self.assertEqual(
+            (usage["cost_usd"], usage["cost_source"], usage["sessions"], usage["auxiliary_tasks"]),
+            (None, "unknown", 2, []),
+        )
+
     def test_every_component_check_passes_on_the_recorded_run(self):
         checks = CF.evaluate(self.tmp, NONCE, self.state)
         self.assertEqual({c: v["ok"] for c, v in checks.items()}, {c: True for c in CF.COMPONENTS})
