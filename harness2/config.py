@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """Deployment settings and dependency versions. Shell values override .env."""
 
@@ -95,9 +97,15 @@ if VERTEX_PROJECT:
     os.environ.setdefault("GOOGLE_CLOUD_PROJECT", VERTEX_PROJECT)
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", VERTEX_REGION)
 
+# Claude Code reaches Anthropic through whatever login `claude` already has (subscription OAuth
+# or ANTHROPIC_API_KEY). Vertex is opt-in: on when a Google Cloud project is configured, and
+# HARNESS2_CLAUDE_VIA_VERTEX=0 or 1 overrides that inference either way.
+CLAUDE_VIA_VERTEX = env("HARNESS2_CLAUDE_VIA_VERTEX", "1" if VERTEX_PROJECT else "0") == "1"
+
 
 SOLVER_MODEL_OC = env("HARNESS2_SOLVER_MODEL", "")
 SOLVER_MODEL_CX = env("HARNESS2_CODEX_MODEL", SOLVER_MODEL_OC.split("/", 1)[-1])
+SOLVER_MODEL_CC = env("HARNESS2_CLAUDE_MODEL", "")
 IMPROVER_MODEL = env("HARNESS2_IMPROVER_MODEL", SOLVER_MODEL_OC)
 JUDGE_MODEL = env("HARNESS2_JUDGE_MODEL", "")
 
@@ -171,7 +179,9 @@ WB_MAX_JOBS = {"oc": 1, "cx": 1}
 WB_MAX_TRIALS = {"oc": 2, "cx": 2}
 WB_MODEL_CONNECTION = "local_proxy"
 
-DEFAULT_PROPOSER_CHANNEL = "opencode"
+DEFAULT_PROPOSER_CHANNEL = env(
+    "HARNESS2_IMPROVER_CHANNEL", "opencode" if "/" in IMPROVER_MODEL else "claude_cli"
+)
 PROPOSER_MODEL_BY_CHANNEL = {"opencode": IMPROVER_MODEL, "claude_cli": IMPROVER_MODEL}
 PHASE_WIDTH = 2
 TRANSPORT_ATTEMPTS = 2

@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modified by The harness2-ports Authors.
 
 """Improver sessions with file access in an isolated context workspace.
 
@@ -103,6 +105,8 @@ class Proposer:
             raise ValueError("Set HARNESS2_IMPROVER_MODEL before starting model sessions")
 
     def env(self) -> dict[str, str]:
+        if self.spec.kind == "claude_cli" and not config.CLAUDE_VIA_VERTEX:
+            return {**os.environ, "ANTHROPIC_MODEL": self.spec.model}
         e = {k: v for k, v in os.environ.items() if k not in _DROP_ENV}
         if self.spec.kind == "claude_cli":
             e.update(
