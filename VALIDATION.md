@@ -127,7 +127,10 @@ workspace before the harness reads or scores it. Claude Code takes the boundary 
 prefix; Hermes takes it after the runner, because `sandbox-exec` cannot start a setuid `sudo`;
 improvers get it for their working directory through `Proposer.floor_runner`. It does not
 cover copies of a checker made elsewhere on the machine, nor other ways of reaching a process
-outside the sandbox; for untrusted executors use a separate user or a container.
+outside the sandbox; for untrusted executors use a separate user or a container. Scoring runs
+outside the sandbox, and the repo-bugfix checkers import the workspace's modules to run their
+hidden tests, so code a rollout leaves in its workspace runs unsandboxed at score time and could
+change its own result there. Treat repo-bugfix scores from an untrusted executor accordingly.
 
 An independent review of the first version, which only denied reads of the tasks root and
 `.git`, reproduced five ways around it: moving the grader directory out and reading it,
