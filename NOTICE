@@ -4,6 +4,7 @@ Copyright 2026 The harness2-ports Authors
 This product includes Harness² (https://github.com/google-research/harness2),
 Copyright 2026 Google LLC, licensed under the Apache License, Version 2.0.
 It was imported at upstream commit 1cfe254e8d25b15f37048c3730134686abe60335.
+It was brought to upstream commit 6868817518876de8fd170c6a8354daca273b6191 on 2026-11-05.
 
 Upstream files that this project changed carry the line
 "Modified by The harness2-ports Authors" under their license header.

@@ -17,9 +17,9 @@
 
     H2_DENY_FILE=<private list> python3 scripts/preflight_publish.py [--repo PATH]
 
-Scans what a push would publish: every blob reachable from any ref (`git rev-list --objects
---all`, so a file added and later deleted still counts, and so does a blob a tag points at
-directly), every commit and annotated tag message, and every author, committer and tagger
+Scans what a push could publish: every blob reachable from any ref but a remote-tracking one
+(`git rev-list --objects --exclude=refs/remotes/* --all`, so a file added and later deleted
+still counts, and so does a blob a tag points at directly; a fetched upstream is never pushed), every commit and annotated tag message, and every author, committer and tagger
 line. Checks, each printed as PASS or FAIL with what it found:
 
     secrets       gitleaks over the whole history
@@ -60,6 +60,10 @@ NOTICE_MUST_SAY = (
     "Google LLC",
     "not an officially supported Google product",
 )
+# The upstream commit this port is synced to; changed files are judged against its tree, which
+# must be present (`git fetch https://github.com/google-research/harness2 main`).
+UPSTREAM_BASE = "6868817518876de8fd170c6a8354daca273b6191"
+PUBLISHED = ("--exclude=refs/remotes/*", "--all")
 MODIFIED_MARK = "harness2-ports Authors"
 UPSTREAM_COPYRIGHT = re.compile(r"(?m)^.*\bCopyright\b.*\bGoogle LLC\b.*$")
 MARKDOWN = {".md", ".markdown", ".mdx"}
@@ -117,7 +121,7 @@ def private_list(repo: Path) -> tuple[dict[str, str], list[re.Pattern]]:
 def history_blobs(repo: Path) -> dict[str, set[str]]:
     """blob sha -> every path it appears under, across all refs (empty for a tagged blob)."""
     paths: dict[str, set[str]] = {}
-    for line in git(repo, "rev-list", "--objects", "--all").splitlines():
+    for line in git(repo, "rev-list", "--objects", *PUBLISHED).splitlines():
         sha, _, path = line.partition(" ")
         paths.setdefault(sha, set()).update([path] if path else [])
     kinds = git(
@@ -149,7 +153,7 @@ def read_blobs(repo: Path, shas: list[str]) -> dict[str, bytes]:
 def commits(repo: Path) -> list[dict[str, str]]:
     fmt = "%H%x1f%an <%ae>%x1f%cn <%ce>%x1f%P%x1f%B%x1e"
     rows = []
-    for rec in git(repo, "log", "--all", f"--format={fmt}").split("\x1e"):
+    for rec in git(repo, "log", *PUBLISHED, f"--format={fmt}").split("\x1e"):
         if rec.strip():
             sha, author, committer, parents, body = rec.strip("\n").split("\x1f")
             rows.append(
@@ -201,7 +205,7 @@ def check_secrets(repo: Path, report: Report) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "leaks.json"
         p = subprocess.run(
-            [exe, "detect", "--source", str(repo), "--log-opts=--all", "--no-banner", "--redact"]
+            [exe, "detect", "--source", str(repo), "--log-opts=" + " ".join(PUBLISHED), "--no-banner", "--redact"]
             + ["--report-format", "json", "--report-path", str(out), "--exit-code", "3"],
             capture_output=True,
             text=True,
@@ -283,12 +287,22 @@ def check_attribution(repo, history, first, report) -> None:
     notice = git(repo, "show", "HEAD:NOTICE")
     problems += [f"NOTICE does not say {s!r}" for s in NOTICE_MUST_SAY if s not in notice]
     upstream_md = git(repo, "show", "HEAD:UPSTREAM.md")
-    changed = git(repo, "diff", "--name-status", "--no-renames", first, "HEAD").splitlines()
+    if UPSTREAM_BASE not in upstream_md or UPSTREAM_BASE not in notice:
+        problems.append(f"UPSTREAM.md and NOTICE must name the upstream base {UPSTREAM_BASE}")
+    probe = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{UPSTREAM_BASE}^{{tree}}"])
+    if probe.returncode != 0:
+        problems.append(f"upstream {UPSTREAM_BASE[:7]} is not here; fetch google-research/harness2")
+        report.add("attribution", problems, "")
+        return
+    base = UPSTREAM_BASE
+    changed = git(repo, "diff", "--name-status", "--no-renames", base, "HEAD").splitlines()
     n_mod = 0
     for line in changed:
         status, path = line.split("\t", 1)
         if status == "A" or path in COMMIT_ONE_OURS:
             continue
+        if status == "D" and path.startswith("assets/"):
+            continue  # upstream's marks and figures, left out on purpose (UPSTREAM.md)
         n_mod += 1
         if f"`{path}`" not in upstream_md:
             problems.append(f"{path}: changed upstream file not listed in UPSTREAM.md")
@@ -298,7 +312,7 @@ def check_attribution(repo, history, first, report) -> None:
         if MODIFIED_MARK not in now:
             problems.append(f"{path}: changed upstream file without a 'Modified by' line")
         kept = {ln.strip() for ln in now.splitlines()}
-        for line in UPSTREAM_COPYRIGHT.findall(git(repo, "show", f"{first}:{path}")):
+        for line in UPSTREAM_COPYRIGHT.findall(git(repo, "show", f"{base}:{path}")):
             if line.strip() not in kept:
                 problems.append(f"{path}: dropped the upstream line {line.strip()!r}")
     report.add(
