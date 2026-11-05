@@ -192,7 +192,7 @@ harness is something a person can open, read and reuse by hand.
 ## Keeping the scores honest
 
 An agent that edits its own setup could, in principle, edit its way around
-the test. The port puts three guards in place:
+the test. The port puts four guards in place:
 
 * **A fixed floor.** Every session starts from settings that no harness edit
   can reach. Your personal `CLAUDE.md`, saved memories and other user settings
