@@ -46,8 +46,8 @@ asks for it.
 
 ## Rules
 
-* **Keep upstream intact.** `tests/test_workflow.py` must stay byte-identical to upstream. Do
-  not change the method text of the stage prompts. A change to the method itself, or to the
+* **Keep upstream intact.** Every test file upstream ships must stay byte-identical to the
+  upstream commit named in `UPSTREAM.md`. Do not change the method text of the stage prompts. A change to the method itself, or to the
   OpenCode or Codex executors, belongs upstream.
 * **Record every upstream change.** When you modify an upstream file, add the line
   `Modified by The harness2-ports Authors` under its license header (Python files) and add a
@@ -56,14 +56,20 @@ asks for it.
   `harness2/claude_floor.py`, the settings allowlists in `harness2/core/tree.py`, or the
   `sandbox-exec` boundary around `localbench/tasks/` (in `harness2/benchmarks/localbench.py`).
   A harness edit must never reach them.
+* **No host secrets in sessions.** Every environment handed to a rollout or an improver goes
+  through `config.scrub_env`; a Claude Code login off Vertex keeps only `config.CLAUDE_AUTH_KEYS`.
+  `SecretScrubTests` must keep passing.
+* **Syncing with upstream.** Apply `git diff <old>..<new> -- . ':!assets'` from an upstream
+  clone with `git apply --3way`, resolve conflicts, rerun the tests and the conformance probe,
+  and record the new base commit in `UPSTREAM.md` and `VALIDATION.md`.
 * **Turn on the commit hooks** with `git config core.hooksPath .githooks`. They refuse
   home-directory paths, secrets and attribution trailers. Do not bypass them with
   `--no-verify`.
 * **Check before publishing.** `scripts/preflight_publish.py` scans the whole git history; run
   it before any push.
-* **Keep claims measured.** This port has not been properly tested; the checks so far only ran
-  the pipeline end to end on easy tasks it already solved. Write expectations, not results,
-  and never claim measured improvement in docs or commit messages.
+* **Keep claims measured.** The sweeps so far ran on tasks the base harness already solved, so
+  they show the pipeline works and cannot show a gain. Never claim measured improvement in docs
+  or commit messages without a sweep on tasks with headroom and its receipt in `VALIDATION.md`.
 
 ## Docs
 

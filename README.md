@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <em>An independent port of <a href="https://github.com/google-research/harness2">Harness²</a> - not from the original authors.</em>
+  <em>An independent port of <a href="https://github.com/google-research/harness2">Harness²</a>, not from the original authors.</em>
 </p>
 
 
@@ -24,7 +24,7 @@ framework for **recursive agent harnessing** in an open world
 recursion while keeping model weights fixed:
 
 * **Task-level recursion** refines the execution harness for the current task
-  through a contrastive **Propose–Probe–Compose** step: propose edits, probe
+  through a contrastive **Propose-Probe-Compose** step: propose edits, probe
   their effects on the same task, and compose a refined harness from behavioral
   contrasts between executions, without ground-truth feedback.
 * **Harnessing-level recursion** updates a persistent *improvement harness*
@@ -37,10 +37,27 @@ upstream's OpenCode and Codex executors. It is not a Google project and is not
 endorsed by the Harness² authors. A sibling port does the same for
 Hermes Agent at [harness2-hermes-port](https://github.com/abhaymettu/harness2-hermes-port).
 
+## Status
+
+This port tracks upstream `main` at
+[`6868817`](https://github.com/google-research/harness2/commit/6868817518876de8fd170c6a8354daca273b6191)
+(2026-11-02), including upstream's fix that keeps API keys and host tokens out of
+agent subprocesses. Upstream ships OpenCode and Codex executors and a `claude_cli`
+improver channel that reaches Claude through Vertex AI only; it has no Claude Code
+executor yet. Community pull requests propose one
+([#66](https://github.com/google-research/harness2/pull/66),
+[#177](https://github.com/google-research/harness2/pull/177)), and
+[#64](https://github.com/google-research/harness2/issues/64) asks for it. If upstream
+merges a Claude Code executor, this section will point there and this port will stop
+being needed.
+
 ## Contents
 
+- [Status](#status)
 - [The idea in plain terms](#the-idea-in-plain-terms)
 - [How one task goes](#how-one-task-goes)
+- [Quick start](#quick-start)
+- [Your own tasks](#your-own-tasks)
 - [Experiments](#experiments)
 - [What Claude Code brings](#what-claude-code-brings)
 - [Keeping the scores honest](#keeping-the-scores-honest)
@@ -95,12 +112,58 @@ Steps 2 to 4 are the task-level recursion from the paper. Step 5 is the
 harnessing-level recursion: the system gets better at improving itself, not
 just at the task in front of it.
 
+## Quick start
+
+Use Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/). The offline demo needs
+no model credentials:
+
+```bash
+uv venv --python 3.12 .venv
+source .venv/bin/activate
+uv pip install -e '.[render]'
+harness2-demo --output runs/demo --k 2
+```
+
+The Claude Code executor needs the `claude` CLI and a Claude Code login (a
+subscription or an API key). Copy the settings template, then check that every
+harness part reaches a session and run two small tasks:
+
+```bash
+cp .env.example .env
+export HARNESS2_CLAUDE_MODEL=claude-haiku-5-5
+harness2-check --substrate cc --conformance
+harness2 --bench local --substrate cc --k 1 --only-domains data-cleaning --max-tasks 2
+harness2-judge --bench local --substrate cc --k 1
+```
+
+The [quick start](docs/QUICKSTART.md) explains each step and every setting.
+
+## Your own tasks
+
+`--bench local` runs on any folder of tasks, not only the 12 shipped in
+`localbench/tasks/`. Point `HARNESS2_LOCALBENCH_TASKS` at a folder with one
+directory per task:
+
+```text
+my-tasks/
+  fix-the-parser/
+    task.json      {"domain": "fix-the-parser", "work": "fix a parsing bug", "timeout": 900}
+    prompt.md      the task as the agent sees it; deliverables go under output/
+    files/         the agent's starting folder
+    grader/grade.py   prints {"n_passed", "n_criteria", "checks"}; never shown to the agent
+```
+
+A task in a domain the port does not ship names its own one-line `work` description.
+If the answer to a task also lives somewhere else on the machine, such as the
+repository the task was cut from, list those paths in `HARNESS2_LOCALBENCH_SEAL`
+(separated by `:`) and no session can read them.
+
 ## Experiments
 
 There are two ways to spend more effort on a task. **Parallel recursion**
 tries several candidate harnesses at once and composes a refinement from all
 of their evidence. **Sequential recursion** takes the refined harness and runs
-Propose–Probe–Compose on it again, several times in a row. The
+Propose-Probe-Compose on it again, several times in a row. The
 [experiment guide](docs/EXPERIMENTS.md) covers both, plus task selection,
 reproducibility and baselines. The upstream benchmarks (JobBench, LAB,
 WorkBuddy-Bench) are described in the [benchmark guides](docs/BENCHMARKS.md);
@@ -135,6 +198,10 @@ the test. The port puts three guards in place:
   can reach. Your personal `CLAUDE.md`, saved memories and other user settings
   never leak into a run, and tools whose effects would outlive the session,
   such as schedules and notifications, are switched off.
+* **No host secrets.** Rollouts and improver sessions start from your
+  environment minus upstream's list of runner and host credentials (judge and
+  bridge keys, GitHub, AWS, OpenAI, Google and Slack tokens). Only Claude
+  Code's own login passes through.
 * **Hidden checkers.** On macOS, the operating system's sandbox stops every
   session from reading the scoring scripts, the run history and other runs'
   results, including any route through another process.
@@ -145,29 +212,16 @@ Agents in these runs can still use the internet, and some public benchmark
 rubrics are online, so a strictly clean evaluation needs
 [network restrictions](docs/EXPERIMENTS.md#web-access).
 
-## What to expect
+## What has been measured
 
-After each task, a second model (the improver) reads what happened and
-updates the harness folder - the briefing, checklist, skills and scripts the
-agent runs with - so the next task starts from a better place. The loop also
-refines its own improvement process, so with use it should get better at
-improving itself, not only better at the tasks.
-
-In an ideal solution, a task the agent failed starts passing after a few
-attempts, the harness folder fills with lessons that visibly change how it
-works, and repeat work gets faster and cheaper as the harness settles in.
-
-Over the next few weeks of constant usage, expect the lessons library to
-grow, small wins on repeated chores first, and the improver proposing
-changes you would not have written by hand. The signal to watch is whether
-gains show up on tasks the agent could not already solve - that is what
-separates real improvement from the machinery just running.
-
-That last part is still open. This port has not been properly tested: the
-runs so far were smoke checks on easy tasks the agent already solved, so
-they show the pipeline works end to end, not that it improves anything.
-Better tests, on harder tasks, are needed. [VALIDATION.md](VALIDATION.md)
-records exactly what was run.
+On this sync, the component probe passes 8 of 8 with the floor held
+(`harness2-check --substrate cc --conformance`, Claude Haiku 5.5), and the
+test suite passes. Earlier sweeps on the 12 localbench tasks ran end to end,
+but the base harness already scored 100% on every task, so those runs show
+the machinery works and cannot show a gain. Measuring a gain needs tasks the
+base harness only partly solves; the `HARNESS2_LOCALBENCH_TASKS` folder
+above is the way in. [VALIDATION.md](VALIDATION.md) lists every command and
+its output.
 
 ## Going further
 
@@ -188,7 +242,8 @@ Cite the Harness² paper:
 @article{xu2026harness2,
   title   = {Harness$^2$: Recursive Agent Harnessing for an Open World},
   author  = {Xu, Ruiyao and Chen, Yanfei and CuiZhu, Zhongying and Dalvi Mishra, Bhavana and Ming, Yifei and Yu, Han and Han, Rujun and Lee, Chen-Yu and Pfister, Tomas},
-  journal = {arXiv preprint arXiv:2610.14224},
+  eprint  = {2610.14224},
+  archivePrefix = {arXiv},
   year    = {2026},
   url     = {https://arxiv.org/abs/2610.14224}
 }

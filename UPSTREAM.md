@@ -6,6 +6,12 @@ at commit `1cfe254e8d25b15f37048c3730134686abe60335` (2026-10-13), licensed unde
 The first commit is that tree, unchanged, taken with `git archive 1cfe254`, except `assets/`.
 Upstream history is not carried. `LICENSE` is the upstream text, unchanged.
 
+On 2026-11-05 the port was brought to upstream `main` at
+`6868817518876de8fd170c6a8354daca273b6191` (2026-11-02): the upstream diff
+`1cfe254..6868817`, `assets/` excluded, applied with a three-way merge. Two files
+conflicted, `.gitignore` (upstream's taken, plus `.pytest_cache/`) and
+`Proposer.env()` (resolved as the table below says). Upstream tests stay byte-identical.
+
 `assets/` (the Harness² logo, wordmark, figures and video) is left out. Apache-2.0 section 6
 grants no right to use the licensor's trademarks, and the logo and wordmark are marks. The
 upstream `MANIFEST.in` still names those files; the images are at the upstream repository.
@@ -19,7 +25,10 @@ replaced, and the table says why.
 | File | Change | Why |
 |---|---|---|
 | `harness2/config.py` | `CLAUDE_VIA_VERTEX` (Vertex only when a Google Cloud project is set, or `HARNESS2_CLAUDE_VIA_VERTEX=1`); `SOLVER_MODEL_CC` from `HARNESS2_CLAUDE_MODEL`; default improver channel is `claude_cli` for a bare model id, overridable with `HARNESS2_IMPROVER_CHANNEL` | Run without Google Cloud on a Claude Code login |
-| `harness2/core/proposer.py` | `Proposer.env()` leaves the caller's environment alone for `claude_cli` when Vertex is off | Upstream always forced Vertex and stripped `ANTHROPIC_API_KEY`, which breaks API-key and subscription logins |
+| `harness2/core/proposer.py` | `Proposer.env()` for `claude_cli` with Vertex off: the caller's environment minus upstream's `SCRUB_ENV`, except `CLAUDE_AUTH_KEYS`, plus `ANTHROPIC_MODEL` | Upstream always forces Vertex, which breaks API-key and subscription logins; the scrub keeps runner and host secrets out, as upstream's does for its own channels |
+| `harness2/config.py` | `CLAUDE_AUTH_KEYS`: the `SCRUB_ENV` names Claude Code reads for its own login (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`) | The one exception to the scrub for Claude Code rollouts and improvers off Vertex |
+| `harness2/config.py`, `harness2/benchmarks/localbench.py` | `LOCALBENCH_TASKS` from `HARNESS2_LOCALBENCH_TASKS`; a task's own `work` line in `task.json`; `LOCALBENCH_SEAL` from `HARNESS2_LOCALBENCH_SEAL`, added to the sealed paths and the floor guard | Run localbench on your own folder of tasks, and seal the places a task's answer also lives |
+| `.gitignore` | Upstream's file plus `.pytest_cache/` | Test cache |
 | `harness2/core/proposer.py` | `_claude_cli()` runs the improver under the same isolation floor as rollouts (`--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--settings` with `claudeMdExcludes` and auto-memory off), plus the adapter's operator hooks and the environment they read (`floor_hooks`, `floor_env`) | Upstream ran editor, composer and reflector sessions with the caller's whole user configuration, so a user-level CLAUDE.md reached them and could be copied into adopted harnesses; the hooks keep improvers out of hidden checkers as rollouts are |
 | `harness2/core/prompts.py` | A `claude_code` surface text (paths, Skill and Agent tools, the hooks file) beside the OpenCode and Codex ones; the method text of the stage prompts is unchanged | `_st()` refuses a surface it has no text for, and the existing texts name OpenCode and Codex paths |
 | `harness2/core/tree.py` | Optional per-surface allowlists: top-level keys of the hooks file, and frontmatter keys of skills and sub-agents | A Claude Code settings file or agent frontmatter can carry permissions, environment, MCP servers or hooks; those belong to the operator's floor, not to an editable harness |

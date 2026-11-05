@@ -21,6 +21,34 @@ commit hook and their tests).
 | V4 isolation | PASS | kernel sandbox; planted reads, moves, rewrites and escapes refused |
 | V5 pre-flight | PASS | every check clean on the whole history; fresh clone installs and passes |
 
+## Sync with upstream 6868817 (2026-11-05)
+
+The port was brought to upstream `main` at `6868817` (2026-11-02). The checks below ran on the
+synced code; the sections after this one are the original 2026-10-18 record.
+
+| Check | Verdict | Receipt |
+|---|---|---|
+| Tests | PASS | `python -m pytest -q tests`: 132 passed, 1 skipped; all 25 upstream test files byte-identical to `6868817` (`cmp`) |
+| Lint | PASS | `ruff check .`: all checks passed |
+| Conformance | PASS | `harness2-check --substrate cc --conformance --model claude-haiku-5-5`: components 8/8, floor held, nonce `d9cbd642`, $0.025 |
+| Host secrets | PASS | live probe below: 0 of 4 planted secrets reach a rollout (4 of 4 did before the sync) |
+
+**Host secrets.** Before the sync, the Claude Code executor passed the whole caller environment to
+the rollout, and the `claude_cli` improver did the same when Vertex was off: the class of leak
+upstream fixed for its own executors in
+[#37](https://github.com/google-research/harness2/pull/37). Both now drop upstream's
+`SCRUB_ENV` and keep only Claude Code's own login. The probe sets `GITHUB_TOKEN`,
+`HARNESS2_JUDGE_API_KEY`, `AWS_SECRET_ACCESS_KEY` and `OPENAI_API_KEY` to a random canary in the
+caller's environment and asks a rollout to run `env | grep -c CANARY-`:
+
+```
+before the sync (023a2fd): 4, and the canary printed three times
+after the sync:            0, and the canary appears nowhere in the stream
+```
+
+`SecretScrubTests` in `tests/test_claude_code_substrate.py` pins the same behaviour without a
+model; its three tests fail on `023a2fd` and pass now.
+
 ## V1 correctness
 
 `tests/test_workflow.py` is the upstream suite. It is byte-identical to upstream `1cfe254`
