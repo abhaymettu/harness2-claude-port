@@ -158,6 +158,14 @@ If the answer to a task also lives somewhere else on the machine, such as the
 repository the task was cut from, list those paths in `HARNESS2_LOCALBENCH_SEAL`
 (separated by `:`) and no session can read them.
 
+Before you spend a sweep on a task, check that its grader can tell good work
+from broken work. [harness2-runtime](https://github.com/abhaymettu/harness2-runtime)
+does that and drives this port: `h2 prove` grades a known-good solution and
+several broken ones and refuses any task whose grader cannot separate them,
+`h2 sweep` runs Harness² here inside a dollar cap, and `h2 propose` turns
+each gain into a diff to read. Clone it beside this repository; it uses this
+checkout's `.venv`.
+
 ## Experiments
 
 There are two ways to spend more effort on a task. **Parallel recursion**
