@@ -200,8 +200,9 @@ the test. The port puts four guards in place:
   such as schedules and notifications, are switched off.
 * **No host secrets.** Rollouts and improver sessions start from your
   environment minus upstream's list of runner and host credentials (judge and
-  bridge keys, GitHub, AWS, OpenAI, Google and Slack tokens). Only Claude
-  Code's own login passes through.
+  bridge keys, GitHub, AWS, OpenAI, Google and Slack tokens) and minus every
+  other variable named like a credential (`NPM_TOKEN`, `HF_TOKEN`,
+  `DB_PASSWORD`). Only Claude Code's own login passes through.
 * **Hidden checkers.** On macOS, the operating system's sandbox stops every
   session from reading the scoring scripts, the run history and other runs'
   results, including any route through another process.

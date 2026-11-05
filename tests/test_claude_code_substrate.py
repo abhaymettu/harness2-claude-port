@@ -143,6 +143,31 @@ class SecretScrubTests(unittest.TestCase):
             },
         )
 
+    def test_rollout_drops_credentials_the_name_list_misses(self):
+        host = {
+            **self.HOST,
+            "NPM_TOKEN": "npm-secret",
+            "HF_TOKEN": "hf-secret",
+            "DB_PASSWORD": "db-secret",
+            "STRIPE_SECRET_KEY": "stripe-secret",
+            "CLAUDE_CODE_OAUTH_TOKEN": "claude-subscription",
+            "TOKENIZERS_PARALLELISM": "false",
+            "GOOGLE_APPLICATION_CREDENTIALS": "/adc.json",
+        }
+        with patch.object(CC.config, "CLAUDE_VIA_VERTEX", False):
+            env = CC.exec_env(host, model="claude-haiku-5-5")
+        self.assertEqual(
+            sorted(env),
+            [
+                "ANTHROPIC_API_KEY",
+                "CLAUDE_CODE_OAUTH_TOKEN",
+                "CLAUDE_CODE_SUBAGENT_MODEL",
+                "GOOGLE_APPLICATION_CREDENTIALS",
+                "PATH",
+                "TOKENIZERS_PARALLELISM",
+            ],
+        )
+
     def test_rollout_on_vertex_drops_the_anthropic_key_too(self):
         with patch.object(CC.config, "CLAUDE_VIA_VERTEX", True):
             env = CC.exec_env(self.HOST, model="claude-haiku-5-5")

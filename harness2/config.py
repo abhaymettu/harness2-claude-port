@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -252,8 +253,22 @@ SCRUB_ENV = frozenset(
 )
 
 
-# The SCRUB_ENV names Claude Code reads for its own login when it does not run on Vertex AI.
-CLAUDE_AUTH_KEYS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")
+# What Claude Code reads for its own login when it does not run on Vertex AI.
+CLAUDE_AUTH_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+)
+
+# Credentials SCRUB_ENV cannot list by name (NPM_TOKEN, HF_TOKEN, a database password). The path
+# to Google's application-default credentials is not one: Vertex AI callers need it.
+SECRET_NAME = re.compile(
+    r"(?:^|_)(?:TOKENS?|SECRETS?|PASSWORD|PASSWD|CREDENTIALS?)(?:_|$)"
+    r"|(?:API|ACCESS|PRIVATE|SECRET)_?KEY(?:_|$)",
+    re.IGNORECASE,
+)
+NOT_SECRETS = frozenset({"GOOGLE_APPLICATION_CREDENTIALS"})
 
 
 def scrub_env(
@@ -261,8 +276,13 @@ def scrub_env(
 ) -> dict[str, str]:
     """Return a copy of `base_env` (default `os.environ`) with runner and host secrets removed."""
     src = os.environ if base_env is None else base_env
-    drop = SCRUB_ENV - set(keep)
-    return {k: v for k, v in src.items() if k not in drop}
+    keep = set(keep)
+    drop = SCRUB_ENV - keep
+    return {
+        k: v
+        for k, v in src.items()
+        if k not in drop and (k in keep or k in NOT_SECRETS or not SECRET_NAME.search(k))
+    }
 
 
 # The SCRUB_ENV names an OpenCode provider reads for its own credentials (models.dev `env`;
