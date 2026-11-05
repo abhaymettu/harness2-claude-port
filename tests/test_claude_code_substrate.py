@@ -121,6 +121,52 @@ class SurfaceTests(unittest.TestCase):
         )
 
 
+class SecretScrubTests(unittest.TestCase):
+    HOST = {
+        "PATH": "/usr/bin",
+        "HARNESS2_JUDGE_API_KEY": "judge-secret",
+        "GITHUB_TOKEN": "gh-secret",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret",
+        "OPENAI_API_KEY": "openai-secret",
+        "ANTHROPIC_API_KEY": "claude-login",
+    }
+
+    def test_rollout_drops_host_secrets_and_keeps_a_direct_claude_login(self):
+        with patch.object(CC.config, "CLAUDE_VIA_VERTEX", False):
+            env = CC.exec_env(self.HOST, model="claude-haiku-5-5")
+        self.assertEqual(
+            env,
+            {
+                "PATH": "/usr/bin",
+                "ANTHROPIC_API_KEY": "claude-login",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "claude-haiku-5-5",
+            },
+        )
+
+    def test_rollout_on_vertex_drops_the_anthropic_key_too(self):
+        with patch.object(CC.config, "CLAUDE_VIA_VERTEX", True):
+            env = CC.exec_env(self.HOST, model="claude-haiku-5-5")
+        self.assertNotIn("ANTHROPIC_API_KEY", env)
+        self.assertNotIn("GITHUB_TOKEN", env)
+        self.assertEqual(env["CLAUDE_CODE_USE_VERTEX"], "1")
+
+    def test_claude_cli_improver_drops_host_secrets(self):
+        spec = ChannelSpec(kind="claude_cli", model="claude-haiku-5-5")
+        with (
+            patch.object(CC.config, "CLAUDE_VIA_VERTEX", False),
+            patch.dict("os.environ", self.HOST, clear=True),
+        ):
+            env = Proposer(spec=spec).env()
+        self.assertEqual(
+            env,
+            {
+                "PATH": "/usr/bin",
+                "ANTHROPIC_API_KEY": "claude-login",
+                "ANTHROPIC_MODEL": "claude-haiku-5-5",
+            },
+        )
+
+
 class MaterialiseTests(unittest.TestCase):
     def test_components_land_where_claude_code_reads_them(self):
         with tempfile.TemporaryDirectory() as tmp:

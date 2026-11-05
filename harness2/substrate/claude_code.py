@@ -192,8 +192,11 @@ def exec_argv(
 
 
 def exec_env(base_env: Mapping[str, str], *, model: str) -> dict[str, str]:
-    """Subagents run on the executor model too, so one model id names the whole rollout."""
-    env = dict(base_env)
+    """Subagents run on the executor model too, so one model id names the whole rollout.
+
+    Runner and host secrets are dropped; a non-Vertex login keeps only Claude Code's own.
+    """
+    env = config.scrub_env(base_env, keep=() if config.CLAUDE_VIA_VERTEX else config.CLAUDE_AUTH_KEYS)
     env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
     if config.CLAUDE_VIA_VERTEX:
         env.update(

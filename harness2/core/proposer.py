@@ -25,7 +25,6 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -44,15 +43,6 @@ SYSTEM_ARG_MAX = 120_000
 
 MAX_CONCURRENCY = int(config.PROPOSER_CONCURRENCY)
 _SEM = threading.BoundedSemaphore(MAX_CONCURRENCY) if MAX_CONCURRENCY > 0 else None
-
-
-_DROP_ENV = (
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_BEDROCK_BASE_URL",
-    "CLAUDE_CODE_USE_BEDROCK",
-)
 
 
 def _obj(d: dict, key: str) -> dict:
@@ -113,8 +103,9 @@ class Proposer:
 
     def env(self) -> dict[str, str]:
         if self.spec.kind == "claude_cli" and not config.CLAUDE_VIA_VERTEX:
-            return {**os.environ, "ANTHROPIC_MODEL": self.spec.model}
-        e = {k: v for k, v in os.environ.items() if k not in _DROP_ENV}
+            return {**config.scrub_env(keep=config.CLAUDE_AUTH_KEYS), "ANTHROPIC_MODEL": self.spec.model}
+        keep = () if self.spec.kind == "claude_cli" else config.provider_keys(self.spec.model)
+        e = config.scrub_env(keep=keep)
         if self.spec.kind == "claude_cli":
             e.update(
                 {
@@ -316,10 +307,12 @@ class Proposer:
             timeout=wall,
         )
         cost = _opencode_cost(p.stdout)
+        text, err = _opencode_stdout(p.stdout)
+        if err:
+            return "", cost, err
         ans = out / "answer.md"
         if ans.is_file() and ans.read_text(errors="replace").strip():
             return ans.read_text(errors="replace"), cost, ""
-        text, err = _opencode_stdout(p.stdout)
         if text.strip():
             return text, cost, ""
         tail = _strip_oc_banner(p.stderr or "").strip()[-300:]

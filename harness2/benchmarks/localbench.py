@@ -52,13 +52,14 @@ from ..core import runmark as RM
 from ..core import tree as HT
 from ..core.spec import BenchPrompts, BenchSpec, ChannelSpec, resolve_channel_model
 from ..substrate import claude_code as CC
+
 try:
     from ..substrate import hermes as HM
 except ImportError:  # the other executor lives in its own repository
     HM = None
 from ..substrate.base import Install, RunRequest
 
-TASKS_ROOT = config.ROOT / "localbench" / "tasks"
+TASKS_ROOT = config.LOCALBENCH_TASKS
 DEFAULT_EDITOR_MODEL = "claude-opus-5-5"
 
 WORK = {
@@ -175,7 +176,7 @@ class LocalBenchAdapter:
         given = Path(tasks_root).absolute()
         self.tasks_root = given.resolve()
         self._deny = (str(given), str(self.tasks_root), "localbench", "grade.py", "hidden_tests")
-        self._deny += ("/grader", "gr?der")
+        self._deny += ("/grader", "gr?der", *map(str, config.LOCALBENCH_SEAL))
         self.kind = substrate
         self._runs = config.RUNS
         if substrate == "hm":
@@ -215,7 +216,7 @@ class LocalBenchAdapter:
 
     @cached_property
     def _sealed(self) -> tuple[Path, ...]:
-        return sealed_paths(self.tasks_root)
+        return tuple(dict.fromkeys(sealed_paths(self.tasks_root) + config.LOCALBENCH_SEAL))
 
     def runner_for(self, own: Path | None) -> tuple[str, ...]:
         """The boundary a session of this benchmark runs under; `own` is its directory."""
@@ -269,7 +270,13 @@ class LocalBenchAdapter:
         return self._meta[task_id]["domain"]
 
     def prompts_for(self, task_id: str) -> BenchPrompts:
-        return BenchPrompts(work=WORK[self.domain_of(task_id)])
+        """The domain's work line; a task outside the shipped domains names its own in `task.json`."""
+        work = self._meta[task_id].get("work") or WORK.get(self.domain_of(task_id))
+        if not work:
+            raise ValueError(
+                f"task {task_id!r}: domain {self.domain_of(task_id)!r} needs a 'work' line in task.json"
+            )
+        return BenchPrompts(work=work)
 
     def task_prompt(self, task_id: str) -> str:
         return (self.tasks_root / task_id / "prompt.md").read_text(encoding="utf-8")

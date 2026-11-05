@@ -83,6 +83,43 @@ class ShippedTasksTests(unittest.TestCase):
                 self.assertEqual(done["n_passed"], done["n_criteria"])
                 self.assertEqual(done, grade(task, ws))
 
+    def test_tasks_root_follows_the_environment(self):
+        own = scratch(self) / "my-tasks"
+        out = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from harness2.benchmarks import localbench as LB; print(LB.TASKS_ROOT)",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+            env={**os.environ, "HARNESS2_LOCALBENCH_TASKS": str(own)},
+        ).stdout.strip()
+        self.assertEqual(out, str(own.resolve()))
+
+    def test_extra_sealed_paths_are_walled_off_and_named_in_the_guard(self):
+        extra = scratch(self) / "source-repo"
+        extra.mkdir()
+        with patch.object(LB.config, "LOCALBENCH_SEAL", (extra.resolve(),)):
+            adapter = make_adapter(scratch(self) / "runs")
+            self.assertIn(extra.resolve(), adapter._sealed)
+            self.assertIn(str(extra.resolve()), adapter.floor_env[LB.GUARD_ENV].split(os.pathsep))
+
+    def test_a_task_outside_the_shipped_domains_brings_its_own_work_line(self):
+        root = scratch(self) / "tasks"
+        for name, meta in {
+            "t1": {"domain": "replies", "work": "answer a text message"},
+            "t2": {"domain": "replies"},
+        }.items():
+            (root / name).mkdir(parents=True)
+            (root / name / "task.json").write_text(json.dumps(meta))
+        adapter = make_adapter(scratch(self) / "runs", tasks_root=root)
+        self.assertEqual(adapter.prompts_for("t1").work, "answer a text message")
+        with self.assertRaisesRegex(ValueError, "needs a 'work' line"):
+            adapter.prompts_for("t2")
+
     def test_prompts_never_name_the_checker(self):
         for task_id in self.adapter.tasks():
             text = self.adapter.task_prompt(task_id).lower()
