@@ -17,4 +17,5 @@ __pycache__/
 !/dependencies/README.md
 !/dependencies/PINNED.md
 !/dependencies/ASSETS.json
+# Modified by The harness2-ports Authors: the test cache.
 .pytest_cache/
